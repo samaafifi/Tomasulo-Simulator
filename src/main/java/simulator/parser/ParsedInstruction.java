@@ -1,3 +1,4 @@
+package simulator.parser;
 import java.util.*;
 
 public class ParsedInstruction {

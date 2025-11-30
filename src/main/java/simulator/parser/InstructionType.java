@@ -1,4 +1,5 @@
 // File: InstructionType.java
+package simulator.parser;
 public enum InstructionType {
     DADDI("DADDI", "integer"),
     DSUBI("DSUBI", "integer"),

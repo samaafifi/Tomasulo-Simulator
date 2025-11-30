@@ -1,4 +1,5 @@
 // src/main/java/simulator/parser/InstructionParser.java
+package simulator.parser;
 import java.io.*;
 import java.util.*;
 import java.util.regex.Pattern;

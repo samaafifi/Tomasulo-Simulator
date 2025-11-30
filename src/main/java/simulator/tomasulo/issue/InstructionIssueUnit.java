@@ -2,7 +2,9 @@ package simulator.tomasulo.issue;
 
  import java.util.*;
 import simulator.parser.*;
-
+import simulator.tomasulo.registerfile.*;
+import simulator.tomasulo.models.Instruction;
+import simulator.tomasulo.issue.*;
 
  public class InstructionIssueUnit {
      private ReservationStationPool rsPool;

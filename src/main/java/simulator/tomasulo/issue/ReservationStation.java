@@ -1,6 +1,6 @@
 package simulator.tomasulo.issue;
 
-import simulator.parser.*;
+import simulator.tomasulo.models.Instruction;  
 
 /**
  * ReservationStation.java

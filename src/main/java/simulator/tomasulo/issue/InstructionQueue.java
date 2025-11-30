@@ -1,6 +1,9 @@
 package simulator.tomasulo.issue;
 
 import simulator.parser.*;
+import simulator.tomasulo.models.Instruction;
+import simulator.tomasulo.registerfile.*;
+import simulator.tomasulo.issue.*;
 
  import java.util.*;
  import java.util.ArrayList;

@@ -157,4 +157,39 @@ public class RegisterFile implements IRegisterFile {
     public RegisterAliasTable getRAT() {
         return rat;
     }
+
+    /**
+     * Gets the value of a register. Alias for readValue().
+     * 
+     * @param registerName the name of the register
+     * @return the value of the register
+     */
+    public double getRegisterValue(String registerName) {
+        return readValue(registerName);
+    }
+
+    /**
+     * Gets the status of a register.
+     * 
+     * @param registerName the name of the register
+     * @return the status (Qi field or empty if ready)
+     */
+    public String getRegisterStatus(String registerName) {
+        String qi = getQi(registerName);
+        return qi != null && !qi.isEmpty() ? qi : "";
+    }
+
+    /**
+     * Sets the register status (i.e., which station it's waiting for).
+     * 
+     * @param registerName the name of the register
+     * @param stationTag the station tag or empty if ready
+     */
+    public void setRegisterStatus(String registerName, String stationTag) {
+        if (stationTag == null || stationTag.isEmpty()) {
+            clearQi(registerName);
+        } else {
+            setQi(registerName, stationTag);
+        }
+    }
 }

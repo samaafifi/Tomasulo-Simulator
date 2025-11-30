@@ -181,7 +181,12 @@ import simulator.tomasulo.issue.*;
              operandArray[i] = operandArray[i].trim();
          }
          
-         return new Instruction(operation, operandArray, labels);
+         // Create instruction from parsed operands
+         String dest = operandArray.length > 0 ? operandArray[0] : null;
+         String src1 = operandArray.length > 1 ? operandArray[1] : null;
+         String src2 = operandArray.length > 2 ? operandArray[2] : null;
+         
+         return new Instruction(operation, dest, src1, src2, "");
      }
      
      /**

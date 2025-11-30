@@ -10,6 +10,12 @@ public class Instruction {
     private String sourceReg1;
     private String sourceReg2;
     private String stationTag;
+    private int id;
+    private int issueCycle;
+    private String baseRegister;
+    private int offset;
+    private int immediate;
+    private boolean hasImmediate;
 
     /**
      * Constructs a new Instruction with the specified parameters.
@@ -27,6 +33,12 @@ public class Instruction {
         this.sourceReg1 = sourceReg1;
         this.sourceReg2 = sourceReg2;
         this.stationTag = stationTag;
+        this.id = 0;
+        this.issueCycle = -1;
+        this.immediate = 0;
+        this.hasImmediate = false;
+        this.offset = 0;
+        this.baseRegister = "";
     }
 
     /**
@@ -57,11 +69,29 @@ public class Instruction {
     }
 
     /**
+     * Gets the first source register using renamed method.
+     *
+     * @return the first source register
+     */
+    public String getSourceRegister1() {
+        return sourceReg1;
+    }
+
+    /**
      * Gets the second source register.
      *
      * @return the second source register, or null if not applicable
      */
     public String getSourceReg2() {
+        return sourceReg2;
+    }
+
+    /**
+     * Gets the second source register using renamed method.
+     *
+     * @return the second source register, or null if not applicable
+     */
+    public String getSourceRegister2() {
         return sourceReg2;
     }
 
@@ -72,6 +102,124 @@ public class Instruction {
      */
     public String getStationTag() {
         return stationTag;
+    }
+
+    /**
+     * Gets the instruction ID.
+     *
+     * @return the instruction ID
+     */
+    public int getId() {
+        return id;
+    }
+
+    /**
+     * Sets the instruction ID.
+     *
+     * @param id the instruction ID
+     */
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    /**
+     * Gets the issue cycle.
+     *
+     * @return the cycle number when this instruction was issued
+     */
+    public int getIssueCycle() {
+        return issueCycle;
+    }
+
+    /**
+     * Sets the issue cycle.
+     *
+     * @param cycle the cycle number when this instruction was issued
+     */
+    public void setIssueCycle(int cycle) {
+        this.issueCycle = cycle;
+    }
+
+    /**
+     * Checks if this instruction has a destination register.
+     *
+     * @return true if the instruction has a destination register, false otherwise
+     */
+    public boolean hasDestination() {
+        return destRegister != null && !destRegister.isEmpty();
+    }
+
+    /**
+     * Checks if this instruction is a memory operation (load or store).
+     *
+     * @return true if the operation is L.D or S.D, false otherwise
+     */
+    public boolean isMemoryOperation() {
+        return "L.D".equals(operation) || "S.D".equals(operation);
+    }
+
+    /**
+     * Gets the base register for memory operations.
+     *
+     * @return the base register
+     */
+    public String getBaseRegister() {
+        return baseRegister;
+    }
+
+    /**
+     * Sets the base register for memory operations.
+     *
+     * @param baseRegister the base register
+     */
+    public void setBaseRegister(String baseRegister) {
+        this.baseRegister = baseRegister;
+    }
+
+    /**
+     * Gets the memory offset for memory operations.
+     *
+     * @return the offset value
+     */
+    public int getOffset() {
+        return offset;
+    }
+
+    /**
+     * Sets the memory offset for memory operations.
+     *
+     * @param offset the offset value
+     */
+    public void setOffset(int offset) {
+        this.offset = offset;
+    }
+
+    /**
+     * Checks if this instruction has an immediate value.
+     *
+     * @return true if the instruction has an immediate value, false otherwise
+     */
+    public boolean hasImmediate() {
+        return hasImmediate;
+    }
+
+    /**
+     * Gets the immediate value.
+     *
+     * @return the immediate value
+     */
+    public int getImmediate() {
+        return immediate;
+    }
+
+    /**
+     * Sets the immediate value.
+     *
+     * @param immediate the immediate value
+     */
+    public void setImmediate(int immediate) {
+        this.immediate = immediate;
+        this.hasImmediate = true;
     }
 
     /**

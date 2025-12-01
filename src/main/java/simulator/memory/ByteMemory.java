@@ -30,6 +30,24 @@ public class ByteMemory {
         return out;
     }
 
+    public int readWord(int addr) {
+    byte[] b = readBytes(addr, 4);
+    return ((b[0] & 0xFF) << 24) |
+           ((b[1] & 0xFF) << 16) |
+           ((b[2] & 0xFF) << 8) |
+           (b[3] & 0xFF);
+}
+
+public void writeWord(int addr, int value) {
+    byte[] b = new byte[4];
+    b[0] = (byte)(value >> 24);
+    b[1] = (byte)(value >> 16);
+    b[2] = (byte)(value >> 8);
+    b[3] = (byte)value;
+    writeBytes(addr, b);
+}
+
+
     private void checkAddr(int addr) {
         if (addr < 0 || addr >= mem.length) throw new IllegalArgumentException("Bad address " + addr);
     }

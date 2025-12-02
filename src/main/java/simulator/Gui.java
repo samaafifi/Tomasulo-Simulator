@@ -17,14 +17,12 @@ import javax.swing.JFileChooser;
 public class Gui extends JFrame implements ActionListener{
 	
 	JLabel output;
-	JPanel topPanel, mainPanel, bottomPanel, cachePanel, latencyPanel;
+	JPanel topPanel, mainPanel, bottomPanel;
 	JButton run, step, stop, open, options;
 	JTextField textField;
 	JFileChooser fc;
 	File f;
 	JFrame optionsMenu;
-	
-	double cacheHit, cacheLatency, cachePenalty, ALULatency, MULLatency, DIVLatency, LSLatency, BranchLatency; //to be moved?
 	
 	public Gui() {
 		run = new JButton("Run");

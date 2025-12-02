@@ -6,7 +6,6 @@ import java.awt.event.ActionListener;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.io.File;
-import java.io.IOException;
 import java.awt.event.ActionEvent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -17,7 +16,7 @@ import javax.swing.JFileChooser;
 
 public class Gui extends JFrame implements ActionListener{
 	
-	JLabel l1, l2, l3;
+	JLabel output;
 	JPanel topPanel, mainPanel, bottomPanel, cachePanel, latencyPanel;
 	JButton run, step, stop, open, options;
 	JTextField textField;
@@ -25,7 +24,7 @@ public class Gui extends JFrame implements ActionListener{
 	File f;
 	JFrame optionsMenu;
 	
-	double cacheHit, cacheLatency, cachePenalty, ALULatency, MULLatency, DIVLatency, LSLatency, BranchLatency;
+	double cacheHit, cacheLatency, cachePenalty, ALULatency, MULLatency, DIVLatency, LSLatency, BranchLatency; //to be moved?
 	
 	public Gui() {
 		run = new JButton("Run");
@@ -49,6 +48,8 @@ public class Gui extends JFrame implements ActionListener{
 		
 		fc = new JFileChooser();
 		
+		output = new JLabel();
+		
 		topPanel = new JPanel();
 		bottomPanel = new JPanel();
 		mainPanel = new JPanel();
@@ -57,6 +58,7 @@ public class Gui extends JFrame implements ActionListener{
 		bottomPanel.add(step);
 		bottomPanel.add(stop);
 		mainPanel.setBackground(Color.GRAY);
+		mainPanel.add(output);
 		topPanel.setLayout(new FlowLayout(FlowLayout.LEADING, 7, 7));
 		topPanel.add(open);
 		topPanel.add(options);
@@ -90,7 +92,7 @@ public class Gui extends JFrame implements ActionListener{
 			}
 		}
 		else {
-			//
+			new Options();
 		}
 	}
 

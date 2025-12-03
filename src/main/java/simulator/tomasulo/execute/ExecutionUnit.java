@@ -8,6 +8,8 @@ public class ExecutionUnit {
     private Map<String, String> instrTypes = new HashMap<>(); // Station Name -> instruction type
     private Map<String, Integer> destRegs = new HashMap<>(); // Station Name -> dest register
     
+    public String excutionOutput = " ";
+    
     public ExecutionUnit() {
         // Initialize empty
     }
@@ -20,6 +22,11 @@ public class ExecutionUnit {
         destRegs.put(stationName, destReg);
         
         System.out.println(String.format(
+            "[EXECUTE] Cycle %d: Started %s in %s -> R%d (latency: %d)",
+            currentCycle, instrType, stationName, destReg, latency
+        ));
+        
+        excutionOutput = excutionOutput.concat("\n" + String.format(
             "[EXECUTE] Cycle %d: Started %s in %s -> R%d (latency: %d)",
             currentCycle, instrType, stationName, destReg, latency
         ));
@@ -81,6 +88,11 @@ public class ExecutionUnit {
             "[EXECUTE] Cycle %d: Completed %s in %s -> result = %.2f",
             currentCycle, instrType, stationName, result
         ));
+        
+        excutionOutput = excutionOutput.concat("\n" + String.format(
+                "[EXECUTE] Cycle %d: Completed %s in %s -> result = %.2f",
+                currentCycle, instrType, stationName, result
+            ));
     }
     
     private double simulateResult(String stationName, String instrType) {

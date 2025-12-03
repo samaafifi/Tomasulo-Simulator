@@ -95,6 +95,7 @@ public class IntegratedSimulationEngine {
         System.out.println("\n[EXECUTE STAGE]");
         outputString = outputString.concat("\n" + "\n[EXECUTE STAGE]");
         executionUnit.cycle(currentCycle);
+        outputString = outputString.concat("\n" + executionUnit.excutionOutput);
         
         // Display system state
         printSystemStatus();
@@ -159,6 +160,7 @@ public class IntegratedSimulationEngine {
             // Start execution
             int latency = instructionLatencies.getOrDefault(instructionType, 1);
             executionUnit.startExecution(rs.getName(), instructionType, destReg, latency, currentCycle);
+            outputString = outputString.concat("\n" + executionUnit.excutionOutput);
             
             System.out.println("Instruction issued to " + rs.getName());
             outputString = outputString.concat("\n" + "Instruction issued to " + rs.getName());

@@ -43,7 +43,7 @@ public class IntegratedSimulationEngine {
             executionUnit = new ExecutionUnit();
             writeBackUnit = new WriteBackUnit();
             
-            System.out.println("✓ All components initialized successfully");
+            System.out.println("All components initialized successfully");
             
         } catch (Exception e) {
             System.err.println("Error initializing components: " + e.getMessage());
@@ -65,7 +65,7 @@ public class IntegratedSimulationEngine {
         instructionLatencies.put("SW", 2);
         instructionLatencies.put("SD", 2);
         instructionLatencies.put("S.S", 2);
-        instructionLatices.put("S.D", 2);
+        instructionLatencies.put("S.D", 2);
         instructionLatencies.put("BEQ", 1);
         instructionLatencies.put("BNE", 1);
     }
@@ -206,6 +206,6 @@ public class IntegratedSimulationEngine {
             engine.runOneCycle();
         }
         
-        System.out.println("\n✅ Simulation completed!");
+        System.out.println("\nSimulation completed!");
     }
 }

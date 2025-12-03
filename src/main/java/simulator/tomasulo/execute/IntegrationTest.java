@@ -1,5 +1,7 @@
 // In IntegrationTest.java, change testInstructionExecutionFlow():
 
+//package simulator.tomasulo.execute;
+
 static void testInstructionExecutionFlow() {
     System.out.println("Test 2: Instruction Execution Flow");
     System.out.println("-----------------------------------");

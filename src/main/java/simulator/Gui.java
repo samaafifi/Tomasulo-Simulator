@@ -24,7 +24,10 @@ public class Gui extends JFrame implements ActionListener{
 	File f;
 	JFrame optionsMenu;
 	
+	IntegratedSimulationEngine ise;
+	
 	public Gui() {
+		ise = new IntegratedSimulationEngine();
 		run = new JButton("Run");
 		step = new JButton("Step");
 		stop = new JButton("Stop");
@@ -56,6 +59,7 @@ public class Gui extends JFrame implements ActionListener{
 		bottomPanel.add(step);
 		bottomPanel.add(stop);
 		mainPanel.setBackground(Color.GRAY);
+		//mainPanel.setLayout(new FlowLayout());
 		mainPanel.add(output);
 		topPanel.setLayout(new FlowLayout(FlowLayout.LEADING, 7, 7));
 		topPanel.add(open);
@@ -69,17 +73,16 @@ public class Gui extends JFrame implements ActionListener{
 		this.add(bottomPanel, BorderLayout.SOUTH);
 		this.setSize(1200, 700);
 		this.setLocationRelativeTo(null);
-		//this.pack();
 		this.setVisible(true);
 	}
 	
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		if(e.getSource() == run) {
-			//
+			ise.main(null);
 		}
 		else if(e.getSource() == step) {
-			//
+			ise.runOneCycle();
 		}
 		else if(e.getSource() == stop) {
 			//

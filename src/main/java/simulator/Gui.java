@@ -77,9 +77,11 @@ public class Gui extends JFrame implements ActionListener{
 	public void actionPerformed(ActionEvent e) {
 		if(e.getSource() == run) {
 			ise.main(null);
+			output.setText(ise.outputString);
 		}
 		else if(e.getSource() == step) {
 			ise.runOneCycle();
+			output.setText(ise.outputString);
 		}
 		else if(e.getSource() == stop) {
 			//

@@ -19,8 +19,11 @@ public class IntegratedSimulationEngine {
     private int currentCycle;
     private Map<String, Integer> instructionLatencies;
     
+    String outputString = "=== Integrated Tomasulo Simulation Engine ===";
+    
     public IntegratedSimulationEngine() {
         System.out.println("Initializing Integrated Tomasulo Simulator...");
+        outputString = outputString.concat("\n" + "Initializing Integrated Tomasulo Simulator...");
         initializeComponents();
         currentCycle = 0;
         instructionLatencies = new HashMap<>();
@@ -44,9 +47,11 @@ public class IntegratedSimulationEngine {
             writeBackUnit = new WriteBackUnit();
             
             System.out.println("All components initialized successfully");
+            outputString = outputString.concat("\n" + "All components initialized successfully");
             
         } catch (Exception e) {
             System.err.println("Error initializing components: " + e.getMessage());
+            outputString = outputString.concat("\n" + "Error initializing components: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -73,17 +78,22 @@ public class IntegratedSimulationEngine {
     public void runOneCycle() {
         currentCycle++;
         System.out.println("\n" + "=".repeat(50));
+        outputString = outputString.concat("\n" + "\n" + "=".repeat(50));
         System.out.println("CYCLE " + currentCycle);
+        outputString = outputString.concat("\n" + "CYCLE " + currentCycle);
         System.out.println("=".repeat(50));
+        outputString = outputString.concat("\n" + "=".repeat(50));
         
         // Tomasulo stages
         
         // 1. WRITE-BACK STAGE (Member 2)
         System.out.println("\n[WRITE-BACK STAGE]");
+        outputString = outputString.concat("\n" + "\n[WRITE-BACK STAGE]");
         writeBackUnit.writeBackCycle(currentCycle);
         
         // 2. EXECUTE STAGE (Member 2)
         System.out.println("\n[EXECUTE STAGE]");
+        outputString = outputString.concat("\n" + "\n[EXECUTE STAGE]");
         executionUnit.cycle(currentCycle);
         
         // Display system state
@@ -92,6 +102,7 @@ public class IntegratedSimulationEngine {
     
     private void printSystemStatus() {
         System.out.println("\n[SYSTEM STATUS]");
+        outputString = outputString.concat("\n" + "\n[SYSTEM STATUS]");
         
         // Show reservation stations
         try {
@@ -101,27 +112,33 @@ public class IntegratedSimulationEngine {
                 if (rs.isBusy()) busyCount++;
             }
             System.out.println("Reservation Stations: " + busyCount + "/" + stations.size() + " busy");
+            outputString = outputString.concat("\n" + "Reservation Stations: " + busyCount + "/" + stations.size() + " busy");
         } catch (Exception e) {
             System.out.println("Reservation Stations: Info not available");
+            outputString = outputString.concat("\n" + "Reservation Stations: Info not available");
         }
         
         // Show execution timers
         Map<String, Integer> timers = executionUnit.getExecutionTimers();
         if (!timers.isEmpty()) {
             System.out.println("Active executions: " + timers);
+            outputString = outputString.concat("\n" + "Active executions: " + timers);
         }
         
         // Show register file status
         try {
             System.out.println("Register File: 64 registers initialized");
+            outputString = outputString.concat("\n" + "Register File: 64 registers initialized");
         } catch (Exception e) {
             System.out.println("Register File: Info not available");
+            outputString = outputString.concat("\n" + "Register File: Info not available");
         }
     }
     
     // Method to simulate instruction execution
     public void simulateInstruction(String instructionType, int destReg) {
         System.out.println("\n>>> Simulating instruction: " + instructionType + " R" + destReg);
+        outputString = outputString.concat("\n" + "\n>>> Simulating instruction: " + instructionType + " R" + destReg);
         
         try {
             // Map instruction type to station type
@@ -131,6 +148,7 @@ public class IntegratedSimulationEngine {
             ReservationStation rs = rsPool.allocateStation(stationType);
             if (rs == null) {
                 System.out.println("No available " + stationType + " station");
+                outputString = outputString.concat("\n" + "No available " + stationType + " station");
                 return;
             }
             
@@ -142,10 +160,12 @@ public class IntegratedSimulationEngine {
             int latency = instructionLatencies.getOrDefault(instructionType, 1);
             executionUnit.startExecution(rs.getName(), instructionType, destReg, latency, currentCycle);
             
-            System.out.println("✓ Instruction issued to " + rs.getName());
+            System.out.println("Instruction issued to " + rs.getName());
+            outputString = outputString.concat("\n" + "Instruction issued to " + rs.getName());
             
         } catch (Exception e) {
             System.out.println("Error simulating instruction: " + e.getMessage());
+            outputString = outputString.concat("\n" + "Error simulating instruction: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -189,6 +209,7 @@ public class IntegratedSimulationEngine {
             rsPool.reset();
         } catch (Exception e) {
             System.out.println("Note: Some components reset with errors");
+            outputString = outputString.concat("\n" + "Note: Some components reset with errors");
         }
         
         initializeComponents();

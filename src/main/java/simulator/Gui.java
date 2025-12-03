@@ -1,28 +1,28 @@
 package simulator;
 
-import java.awt.Color;
-import java.awt.Font;
 import java.awt.event.ActionListener;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.io.File;
 import java.awt.event.ActionEvent;
 import javax.swing.JFrame;
-import javax.swing.JLabel;
+import javax.swing.JTextArea;
 import javax.swing.JButton;
 import javax.swing.JTextField;
 import javax.swing.JPanel;
 import javax.swing.JFileChooser;
+import javax.swing.JScrollPane;
 
 public class Gui extends JFrame implements ActionListener{
 	
-	JLabel output;
-	JPanel topPanel, mainPanel, bottomPanel;
+	JTextArea output;
+	JPanel topPanel, bottomPanel;
 	JButton run, step, stop, open, options;
 	JTextField textField;
 	JFileChooser fc;
 	File f;
 	JFrame optionsMenu;
+	JScrollPane mainPanel;
 	
 	IntegratedSimulationEngine ise;
 	
@@ -49,18 +49,15 @@ public class Gui extends JFrame implements ActionListener{
 		
 		fc = new JFileChooser();
 		
-		output = new JLabel();
+		output = new JTextArea();
 		
 		topPanel = new JPanel();
 		bottomPanel = new JPanel();
-		mainPanel = new JPanel();
+		mainPanel = new JScrollPane(output, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 		bottomPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 5, 10));
 		bottomPanel.add(run);
 		bottomPanel.add(step);
 		bottomPanel.add(stop);
-		mainPanel.setBackground(Color.GRAY);
-		//mainPanel.setLayout(new FlowLayout());
-		mainPanel.add(output);
 		topPanel.setLayout(new FlowLayout(FlowLayout.LEADING, 7, 7));
 		topPanel.add(open);
 		topPanel.add(options);

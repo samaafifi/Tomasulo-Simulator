@@ -6,8 +6,10 @@ import simulator.tomasulo.registerfile.*;
 import java.util.*;
 
 public class IntegrationTest {
+	static String outputString = " ";
     public static void main(String[] args) {
         System.out.println("=== TOMASULO SIMULATOR INTEGRATION TEST ===\n");
+        outputString = outputString.concat("=== TOMASULO SIMULATOR INTEGRATION TEST ===\n");
         
         // Test 1: Basic component connection
         testComponentIntegration();
@@ -18,12 +20,15 @@ public class IntegrationTest {
         // Test 3: CDB arbitration with multiple instructions
         testCDBArbitration();
         
-        System.out.println("\n✅ Integration tests completed!");
+        System.out.println("\nIntegration tests completed!");
+        outputString = outputString.concat("\n" + "\nIntegration tests completed!");
     }
     
     static void testComponentIntegration() {
         System.out.println("Test 1: Basic Component Integration");
+        outputString = outputString.concat("\n" + "Test 1: Basic Component Integration");
         System.out.println("------------------------------------");
+        outputString = outputString.concat("\n" + "------------------------------------");
         
         try {
             // Create components from all members
@@ -40,35 +45,49 @@ public class IntegrationTest {
             // Initialize register file
             registerFile.initializeRegisters();
             
-            System.out.println("✓ All components created successfully:");
+            System.out.println("All components created successfully:");
+            outputString = outputString.concat("\n" + "All components created successfully:");
             System.out.println("  - RegisterFile: " + registerFile.getClass().getSimpleName());
+            outputString = outputString.concat("\n" + "  - RegisterFile: " + registerFile.getClass().getSimpleName());
             System.out.println("  - RegisterAliasTable: " + rat.getClass().getSimpleName());
+            outputString = outputString.concat("\n" + "  - RegisterAliasTable: " + rat.getClass().getSimpleName());
             System.out.println("  - ReservationStationPool: " + rsPool.getClass().getSimpleName());
+            outputString = outputString.concat("\n" + "  - ReservationStationPool: " + rsPool.getClass().getSimpleName());
             System.out.println("  - CommonDataBus: " + cdb.getClass().getSimpleName());
+            outputString = outputString.concat("\n" + "  - CommonDataBus: " + cdb.getClass().getSimpleName());
             System.out.println("  - BroadcastManager: " + broadcastManager.getClass().getSimpleName());
+            outputString = outputString.concat("\n" + "  - BroadcastManager: " + broadcastManager.getClass().getSimpleName());
             System.out.println("  - ExecutionUnit: " + execUnit.getClass().getSimpleName());
+            outputString = outputString.concat("\n" + "  - ExecutionUnit: " + execUnit.getClass().getSimpleName());
             System.out.println("  - WriteBackUnit: " + wbUnit.getClass().getSimpleName());
+            outputString = outputString.concat("\n" + "  - WriteBackUnit: " + wbUnit.getClass().getSimpleName());
             
             // Test some basic operations
             System.out.println("\nTesting basic operations:");
+            outputString = outputString.concat("\n" + "\nTesting basic operations:");
             
             // Test register file
             registerFile.writeValue("F1", 10.5);
             double value = registerFile.readValue("F1");
-            System.out.println("  ✓ Register F1 write/read: " + value);
+            System.out.println("Register F1 write/read: " + value);
+            outputString = outputString.concat("\n" + "Register F1 write/read: " + value);
             
             // Test reservation station pool
             ReservationStation rs = rsPool.allocateStation("FP_ADD");
             if (rs != null) {
-                System.out.println("  ✓ Allocated reservation station: " + rs.getName());
+                System.out.println("Allocated reservation station: " + rs.getName());
+                outputString = outputString.concat("\n" + "Allocated reservation station: " + rs.getName());
                 rsPool.releaseStation(rs);
-                System.out.println("  ✓ Released reservation station");
+                System.out.println("Released reservation station");
+                outputString = outputString.concat("\n" + "Released reservation station");
             }
             
-            System.out.println("✓ Basic integration test passed\n");
+            System.out.println("Basic integration test passed\n");
+            outputString = outputString.concat("\n" + "Basic integration test passed\n");
             
         } catch (Exception e) {
             System.err.println("Integration error: " + e.getMessage());
+            outputString = outputString.concat("\n" + "Integration error: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -77,7 +96,9 @@ public class IntegrationTest {
 
 static void testInstructionExecutionFlow() {
     System.out.println("Test 2: Instruction Execution Flow");
+    outputString = outputString.concat("\n" + "Test 2: Instruction Execution Flow");
     System.out.println("-----------------------------------");
+    outputString = outputString.concat("\n" + "-----------------------------------");
     
     try {
         // Setup components
@@ -97,16 +118,20 @@ static void testInstructionExecutionFlow() {
         WriteBackUnit wbUnit = new WriteBackUnit(broadcastManager);
         
         System.out.println("Simulating: ADD.D F2, F0, F4");
+        outputString = outputString.concat("\n" + "Simulating: ADD.D F2, F0, F4");
         System.out.println("(F0 = 5.0, F4 = 3.0)");
+        outputString = outputString.concat("\n" + "(F0 = 5.0, F4 = 3.0)");
         
         // Allocate a reservation station - use Add1 (RS1 equivalent)
         ReservationStation addStation = rsPool.allocateStation("FP_ADD");
         if (addStation == null) {
-            System.out.println("✗ No available FP_ADD station");
+            System.out.println("No available FP_ADD station");
+            outputString = outputString.concat("\n" + "No available FP_ADD station");
             return;
         }
         
         System.out.println("Allocated station: " + addStation.getName());
+        outputString = outputString.concat("\n" + "Allocated station: " + addStation.getName());
         
         // Configure the reservation station
         addStation.setBusy(true);
@@ -122,6 +147,7 @@ static void testInstructionExecutionFlow() {
         // Run simulation for 4 cycles
         for (int cycle = 1; cycle <= 4; cycle++) {
             System.out.println("\n--- Cycle " + cycle + " ---");
+            outputString = outputString.concat("\n" + "\n--- Cycle " + cycle + " ---");
             
             // Execute stage
             execUnit.cycle(cycle);
@@ -133,22 +159,28 @@ static void testInstructionExecutionFlow() {
             try {
                 double f2Value = registerFile.readValue("F2");
                 System.out.println("  F2 value: " + f2Value);
+                outputString = outputString.concat("\n" + "  F2 value: " + f2Value);
             } catch (Exception e) {
                 System.out.println("  F2 not ready yet");
+                outputString = outputString.concat("\n" + "  F2 not ready yet");
             }
         }
         
-        System.out.println("✓ Instruction flow test completed\n");
+        System.out.println("Instruction flow test completed\n");
+        outputString = outputString.concat("\n" + "Instruction flow test completed\n");
         
     } catch (Exception e) {
         System.err.println("Instruction flow error: " + e.getMessage());
+        outputString = outputString.concat("\n" + "Instruction flow error: " + e.getMessage());
         e.printStackTrace();
     }
 }
     
     static void testCDBArbitration() {
         System.out.println("Test 3: CDB Arbitration with Multiple Instructions");
+        outputString = outputString.concat("\n" + "Test 3: CDB Arbitration with Multiple Instructions");
         System.out.println("--------------------------------------------------");
+        outputString = outputString.concat("\n" + "--------------------------------------------------");
         
         try {
             // Setup
@@ -161,9 +193,13 @@ static void testInstructionExecutionFlow() {
             WriteBackUnit wbUnit = new WriteBackUnit(broadcastManager);
             
             System.out.println("Testing CDB priority with mixed instruction types:");
+            outputString = outputString.concat("\n" + "Testing CDB priority with mixed instruction types:");
             System.out.println("1. DADDI R1, R0, 10  (priority 4, latency 1)");
+            outputString = outputString.concat("\n" + "1. DADDI R1, R0, 10  (priority 4, latency 1)");
             System.out.println("2. ADD.D F2, F0, F4  (priority 3, latency 2)");
+            outputString = outputString.concat("\n" + "2. ADD.D F2, F0, F4  (priority 3, latency 2)");
             System.out.println("3. LW R2, 0(R3)      (priority 1, latency 2)");
+            outputString = outputString.concat("\n" + "3. LW R2, 0(R3)      (priority 1, latency 2)");
             
             // Manually test CDB arbitration
             CommonDataBus cdb = CommonDataBus.getInstance();
@@ -175,11 +211,14 @@ static void testInstructionExecutionFlow() {
             
             // Process cycle 1 - should select DADDI first (highest priority)
             System.out.println("\nCycle 1 - CDB arbitration:");
+            outputString = outputString.concat("\n" + "\nCycle 1 - CDB arbitration:");
             List<BroadcastRequest> broadcasts = cdb.processBroadcasts(1);
             System.out.println("Selected: " + broadcasts);
+            outputString = outputString.concat("\n" + "Selected: " + broadcasts);
             
             if (!broadcasts.isEmpty() && broadcasts.get(0).getInstrType().equals("DADDI")) {
-                System.out.println("✓ PASS: DADDI (priority 4) selected before ADD.D (3) and LW (1)");
+                System.out.println("PASS: DADDI (priority 4) selected before ADD.D (3) and LW (1)");
+                outputString = outputString.concat("\n" + "PASS: DADDI (priority 4) selected before ADD.D (3) and LW (1)");
             }
             
             // Clear for next test
@@ -187,19 +226,23 @@ static void testInstructionExecutionFlow() {
             
             // Test execution timing
             System.out.println("\nTesting execution timing:");
+            outputString = outputString.concat("\n" + "\nTesting execution timing:");
             execUnit.startExecution(1, "ADD.D", 10, 2, 0);
             execUnit.startExecution(2, "MUL.D", 11, 4, 0);
             
             for (int i = 1; i <= 5; i++) {
                 System.out.println("Cycle " + i + ": " + execUnit.getExecutionTimers());
+                outputString = outputString.concat("\n" + "Cycle " + i + ": " + execUnit.getExecutionTimers());
                 execUnit.cycle(i);
                 wbUnit.writeBackCycle(i);
             }
             
-            System.out.println("✓ CDB arbitration test completed\n");
+            System.out.println("CDB arbitration test completed\n");
+            outputString = outputString.concat("\n" + "CDB arbitration test completed\n");
             
         } catch (Exception e) {
             System.err.println("CDB arbitration error: " + e.getMessage());
+            outputString = outputString.concat("\n" + "CDB arbitration error: " + e.getMessage());
             e.printStackTrace();
         }
     }

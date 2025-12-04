@@ -25,9 +25,11 @@ public class Gui extends JFrame implements ActionListener{
 	JScrollPane mainPanel;
 	
 	IntegratedSimulationEngine ise;
+	IntegrationTest it;
 	
 	public Gui() {
 		ise = new IntegratedSimulationEngine();
+		it = new IntegrationTest();
 		run = new JButton("Run");
 		step = new JButton("Step");
 		stop = new JButton("Stop");
@@ -64,7 +66,6 @@ public class Gui extends JFrame implements ActionListener{
 		
 		this.setTitle("Micro Project");
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		//this.setLayout(new BorderLayout()); .setBounds(x, y, w, h)
 		this.add(topPanel, BorderLayout.NORTH);
 		this.add(mainPanel, BorderLayout.CENTER);
 		this.add(bottomPanel, BorderLayout.SOUTH);
@@ -76,8 +77,10 @@ public class Gui extends JFrame implements ActionListener{
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		if(e.getSource() == run) {
-			ise.main(null);
-			output.setText(ise.outputString);
+			//ise.main(null);
+			//output.setText(ise.outputString);
+			it.main(null);
+			output.setText(it.outputString);
 		}
 		else if(e.getSource() == step) {
 			ise.runOneCycle();

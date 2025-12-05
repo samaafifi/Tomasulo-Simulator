@@ -40,13 +40,14 @@ public class CommonDataBus {
     public List<BroadcastRequest> processBroadcasts(int currentCycle) {
         List<BroadcastRequest> broadcasts = arbitration.selectBroadcasts(currentCycle);
         
-       /* for (BroadcastRequest request : broadcasts) {
+        // Actually broadcast the results to all listeners
+        for (BroadcastRequest request : broadcasts) {
             broadcastResult(
-                request.getRsId(),      // YOUR method name
+                request.getRsId(),
                 request.getResult(),
-                request.getDestReg()    // YOUR method name
+                request.getDestReg()
             );
-        }*/
+        }
         
         return broadcasts;
     }

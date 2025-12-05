@@ -16,14 +16,33 @@ public class CDBArbitration {
             return selected;
         }
         
+        // CRITICAL FIX: Only process requests that are ready in the current cycle
+        // This ensures write-back happens AFTER execution completes, not in the same cycle
+        List<BroadcastRequest> readyRequests = new ArrayList<>();
+        Iterator<BroadcastRequest> it = pendingRequests.iterator();
+        while (it.hasNext()) {
+            BroadcastRequest req = it.next();
+            // Process if readyCycle is 0 (immediate/legacy) or readyCycle <= currentCycle
+            if (req.getReadyCycle() == 0 || req.getReadyCycle() <= currentCycle) {
+                readyRequests.add(req);
+                it.remove();
+            }
+        }
+        
+        if (readyRequests.isEmpty()) {
+            return selected;
+        }
+        
         // Priority-based arbitration - uses getInstrType()
-        pendingRequests.sort((a, b) -> {
+        readyRequests.sort((a, b) -> {
             return getPriority(b.getInstrType()) - getPriority(a.getInstrType());
         });
         
         // Select first (highest priority)
-        if (!pendingRequests.isEmpty()) {
-            selected.add(pendingRequests.remove(0));
+        if (!readyRequests.isEmpty()) {
+            selected.add(readyRequests.remove(0));
+            // Put remaining ready requests back for next cycle
+            pendingRequests.addAll(readyRequests);
         }
         
         return selected;

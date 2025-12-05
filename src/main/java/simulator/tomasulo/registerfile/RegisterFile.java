@@ -109,8 +109,12 @@ public class RegisterFile implements IRegisterFile {
         if (reg == null) {
             throw new IllegalArgumentException("Register not found: " + registerName);
         }
+        // CRITICAL FIX: Write value and clear Qi (register is now ready)
+        // This ensures register file values are properly updated
         reg.setValue(value);
+        // Clear RAT entry for this register
         rat.clear(registerName);
+        System.out.println("  [RegisterFile] Updated " + registerName + " = " + value + " (Qi cleared)");
     }
     
     @Override

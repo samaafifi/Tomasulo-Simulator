@@ -5,12 +5,22 @@ public class BroadcastRequest {
     private double result;
     private int destReg;
     private String instrType;
+    private int readyCycle = 0; // Cycle when this broadcast is ready (default: immediate)
     
     public BroadcastRequest(int rsId, double result, int destReg, String instrType) {
         this.rsId = rsId;
         this.result = result;
         this.destReg = destReg;
         this.instrType = instrType;
+        this.readyCycle = 0; // Default: ready immediately (for backward compatibility)
+    }
+    
+    public void setReadyCycle(int cycle) {
+        this.readyCycle = cycle;
+    }
+    
+    public int getReadyCycle() {
+        return readyCycle;
     }
     
     // Your code uses these

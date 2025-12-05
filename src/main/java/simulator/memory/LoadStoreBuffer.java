@@ -93,10 +93,12 @@ public class LoadStoreBuffer {
 
             // NEW: Check for address clash with earlier operations
             if (hasAddressClashWithEarlier(e)) {
+                // Address clash - must wait for earlier operations to complete
+                // Don't decrement timer - this operation is stalled
                 continue;  // Must wait for earlier operations
             }
 
-            // decrement timer
+            // decrement timer (only if no address clash)
             e.remainingCycles--;
 
             if (e.remainingCycles <= 0) {

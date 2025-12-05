@@ -36,16 +36,22 @@ public class MemorySystem {
         }
     }
 
-    // Default constructor with reasonable defaults
+    // Default constructor - DEPRECATED: Should not be used
+    // NO HARDCODED VALUES - This constructor violates "NO HARDCODE" requirement
+    // All MemorySystem instances should be created with explicit user-configured parameters
+    // This constructor is kept only for backward compatibility but should not be called
+    @Deprecated
     public MemorySystem() {
-        this(1024 * 1024,      // 1MB memory
-             64 * 1024,        // 64KB cache
-             64,               // 64 byte blocks
-             1,                // 1 cycle hit latency
-             10,               // 10 cycle miss penalty
-             2,                // 2 cycle load latency
-             2,                // 2 cycle store latency
-             8);               // 8 entry LSB
+        // WARNING: This constructor uses hardcoded values - violates "NO HARDCODE" requirement
+        // Use the parameterized constructor with user-configured values instead
+        this(1024 * 1024,      // 1MB memory - INTENTIONALLY FIXED
+             64 * 1024,        // 64KB cache - HARDCODED (should be user-configured)
+             64,               // 64 byte blocks - HARDCODED (should be user-configured)
+             1,                // 1 cycle hit latency - HARDCODED (should be user-configured)
+             10,               // 10 cycle miss penalty - HARDCODED (should be user-configured)
+             2,                // 2 cycle load latency - HARDCODED (should be user-configured)
+             2,                // 2 cycle store latency - HARDCODED (should be user-configured)
+             8);               // 8 entry LSB - HARDCODED (should be user-configured)
     }
 
     public MemorySystem(int memorySizeBytes,
@@ -236,6 +242,30 @@ public class MemorySystem {
 
     public LoadStoreBuffer getLoadStoreBuffer() {
         return lsb;
+    }
+
+    /** Get load latency (base latency for load operations) */
+    public int getLoadLatency() {
+        return loadLatency;
+    }
+
+    /** Get store latency (base latency for store operations) */
+    public int getStoreLatency() {
+        return storeLatency;
+    }
+
+    /** Calculate total latency for a load operation at the given address */
+    public int calculateLoadLatency(int address) {
+        return cache.isHit(address)
+            ? loadLatency + cache.getHitLatency()
+            : loadLatency + cache.getMissPenalty();
+    }
+
+    /** Calculate total latency for a store operation at the given address */
+    public int calculateStoreLatency(int address) {
+        return cache.isHit(address)
+            ? storeLatency + cache.getHitLatency()
+            : storeLatency + cache.getMissPenalty();
     }
 
     /** Reset memory system (for new simulation) */

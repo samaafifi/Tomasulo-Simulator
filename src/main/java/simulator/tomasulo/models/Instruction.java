@@ -105,6 +105,15 @@ public class Instruction {
     }
 
     /**
+     * Sets the reservation station tag.
+     *
+     * @param stationTag the station tag to set
+     */
+    public void setStationTag(String stationTag) {
+        this.stationTag = stationTag;
+    }
+
+    /**
      * Gets the instruction ID.
      *
      * @return the instruction ID
@@ -152,10 +161,13 @@ public class Instruction {
     /**
      * Checks if this instruction is a memory operation (load or store).
      *
-     * @return true if the operation is L.D or S.D, false otherwise
+     * @return true if the operation is a load or store, false otherwise
      */
     public boolean isMemoryOperation() {
-        return "L.D".equals(operation) || "S.D".equals(operation);
+        if (operation == null) return false;
+        String op = operation.toUpperCase();
+        return op.equals("LW") || op.equals("LD") || op.equals("L.S") || op.equals("L.D") ||
+               op.equals("SW") || op.equals("SD") || op.equals("S.S") || op.equals("S.D");
     }
 
     /**

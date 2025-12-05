@@ -13,15 +13,18 @@ import java.util.*;
      private Map<String, Integer> stationCounts;
      
      /**
-      * Constructor with default configuration
+     * Constructor with no default configuration
+     * NO HARDCODED VALUES - User MUST configure stations via GUI before use
+     * Call reconfigure() with user-provided stationCounts map to initialize stations
       */
      public ReservationStationPool() {
          this.stationsByType = new HashMap<>();
          this.allStations = new ArrayList<>();
          this.stationCounts = new HashMap<>();
          
-         // Default configuration
-         initializeDefaultConfiguration();
+        // REMOVED: initializeDefaultConfiguration() - NO HARDCODED VALUES
+        // User MUST configure stations via GUI before use
+        // Call reconfigure() with user-provided stationCounts map
      }
      
      /**
@@ -35,20 +38,9 @@ import java.util.*;
          initializeStations();
      }
      
-     /**
-      * Initialize with default number of stations
-      */
-     private void initializeDefaultConfiguration() {
-         stationCounts.put("FP_ADD", 3);      // 3 FP Add/Sub stations
-         stationCounts.put("FP_MUL", 2);      // 2 FP Multiply stations
-         stationCounts.put("FP_DIV", 2);      // 2 FP Divide stations
-         stationCounts.put("LOAD", 2);        // 2 Load buffers
-         stationCounts.put("STORE", 2);       // 2 Store buffers
-         stationCounts.put("INTEGER_ADD", 2); // 2 Integer Add/Sub stations
-         stationCounts.put("BRANCH", 1);      // 1 Branch unit
-         
-         initializeStations();
-     }
+    // REMOVED: initializeDefaultConfiguration() method
+    // NO HARDCODED VALUES - All station counts must be configured by user via GUI
+    // This ensures compliance with the requirement: "NO HARDCODE - ALL VALUES ARE INPUTS BY THE USER"
      
      /**
       * Creates all reservation stations based on configuration

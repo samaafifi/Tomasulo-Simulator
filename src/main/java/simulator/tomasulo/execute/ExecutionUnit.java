@@ -13,8 +13,8 @@ public class ExecutionUnit {
     private int currentCycle = 0;
     
     public ExecutionUnit() {
-        // Initialize with default latencies
-        setDefaultLatencies();
+        // NO DEFAULT LATENCIES - user must configure via GUI
+        // Latencies will be set by user input only
     }
     
     /**
@@ -24,37 +24,49 @@ public class ExecutionUnit {
         this.rsPool = rsPool;
     }
     
-    private void setDefaultLatencies() {
-        latencies.put("DADDI", 1);
-        latencies.put("DSUBI", 1);
-        latencies.put("ADD.D", 2);
-        latencies.put("SUB.D", 2);
-        latencies.put("MUL.D", 10);
-        latencies.put("DIV.D", 40);
-        latencies.put("LW", 2);
-        latencies.put("LD", 2);
-        latencies.put("L.S", 2);
-        latencies.put("L.D", 2);
-        latencies.put("SW", 2);
-        latencies.put("SD", 2);
-        latencies.put("S.S", 2);
-        latencies.put("S.D", 2);
-        latencies.put("BEQ", 1);
-        latencies.put("BNE", 1);
-    }
-    
     /**
      * Set latency for an instruction type
      */
     public void setLatency(String instructionType, int latency) {
-        latencies.put(instructionType.toUpperCase(), latency);
+        if (instructionType == null || instructionType.isEmpty()) {
+            System.err.println("WARNING: Attempted to set latency for null/empty instruction type");
+            return;
+        }
+        String key = instructionType.toUpperCase();
+        latencies.put(key, latency);
+        System.out.println("[ExecutionUnit] Set latency for " + key + " = " + latency + " cycles");
     }
     
     /**
      * Get latency for an instruction type
+     * Returns 0 if not configured (user must set latency before execution)
      */
     public int getLatency(String instructionType) {
-        return latencies.getOrDefault(instructionType.toUpperCase(), 1);
+        if (instructionType == null || instructionType.isEmpty()) {
+            return 0;
+        }
+        String key = instructionType.toUpperCase();
+        Integer latency = latencies.get(key);
+        if (latency == null) {
+            // Don't print warning here - let the caller decide when to warn
+            // This method is called frequently and warnings should be contextual
+            return 0; // Return 0 to indicate not configured
+        }
+        return latency;
+    }
+    
+    /**
+     * Get all configured latencies (for debugging)
+     */
+    public Map<String, Integer> getAllLatencies() {
+        return new HashMap<>(latencies);
+    }
+    
+    /**
+     * Check if a latency is configured for an instruction type
+     */
+    public boolean hasLatency(String instructionType) {
+        return latencies.containsKey(instructionType.toUpperCase());
     }
     
     /**
@@ -88,17 +100,74 @@ public class ExecutionUnit {
     public void cycle(int currentCycle) {
         this.currentCycle = currentCycle;
         
-        // First, check for ready stations that were issued in a PREVIOUS cycle
+        // CRITICAL: Decrement timers FIRST for stations already executing
+        // This ensures that if an instruction starts execution in cycle N with latency L,
+        // it will complete in cycle N+L-1 (after L cycles of execution)
+        List<String> completed = new ArrayList<>();
+        
+        // Decrement timers for stations already executing
+        for (Map.Entry<String, Integer> entry : timers.entrySet()) {
+            String stationName = entry.getKey();
+            int cyclesLeft = entry.getValue() - 1;
+            
+            // Synchronize with ReservationStation's remainingCycles
+            if (rsPool != null) {
+                ReservationStation rs = rsPool.getStationByName(stationName);
+                if (rs != null) {
+                    rs.setRemainingCycles(Math.max(0, cyclesLeft));
+                }
+            }
+            
+            if (cyclesLeft <= 0) {
+                completed.add(stationName);
+                completeExecution(stationName, currentCycle);
+            } else {
+                timers.put(stationName, cyclesLeft);
+            }
+        }
+        
+        // Remove completed stations from tracking
+        for (String stationName : completed) {
+            timers.remove(stationName);
+            instrTypes.remove(stationName);
+            destRegs.remove(stationName);
+        }
+        
+        // NOW check for ready stations that were issued in a PREVIOUS cycle
         // and start their execution (ensures issue and execution start in different cycles)
+        // This must happen AFTER timer decrement to prevent same-cycle completion
         if (rsPool != null) {
             List<ReservationStation> readyStations = rsPool.getReadyStations();
             for (ReservationStation rs : readyStations) {
                 // Only start execution if:
                 // 1. Execution hasn't started yet
-                // 2. Station was issued in a previous cycle (not current cycle)
-                if (!rs.isExecutionStarted() && rs.getIssueCycle() >= 0 && rs.getIssueCycle() < currentCycle) {
+                // 2. Station was issued in a STRICTLY PREVIOUS cycle (issueCycle < currentCycle)
+                // 3. NOT a memory operation (load/store execute via MemorySystem, not ExecutionUnit)
+                // 4. Station is not already in timers (avoid duplicate starts)
+                if (!rs.isExecutionStarted() && 
+                    rs.getIssueCycle() >= 0 && 
+                    rs.getIssueCycle() < currentCycle &&
+                    !timers.containsKey(rs.getName())) {
+                    
                     String instrType = rs.getOp();
+                    
+                    // Skip load/store instructions - they execute via MemorySystem
+                    if (isMemoryOperation(instrType)) {
+                        continue;
+                    }
+                    
                     int latency = getLatency(instrType);
+                    if (latency <= 0) {
+                        // Skip if latency not configured
+                        // Log warning only once per instruction to avoid spam
+                        // (This check happens every cycle for ready instructions)
+                        if (!rs.isExecutionStarted()) {
+                            System.err.println("WARNING: Latency not configured for " + instrType + 
+                                " in " + rs.getName() + " - user must set latency!");
+                            System.err.println("  Available latencies: " + latencies.keySet());
+                        }
+                        continue;
+                    }
                     
                     // Get destination register from instruction
                     int destReg = 0;
@@ -111,32 +180,11 @@ public class ExecutionUnit {
                         }
                     }
                     
+                    // Start execution: timer is set to latency, will count down in future cycles
                     startExecution(rs.getName(), instrType, destReg, latency, currentCycle);
                     rs.startExecution(latency);
                 }
             }
-        }
-        
-        List<String> completed = new ArrayList<>();
-        
-        // Decrement timers for stations already executing
-        for (Map.Entry<String, Integer> entry : timers.entrySet()) {
-            String stationName = entry.getKey();
-            int cyclesLeft = entry.getValue() - 1;
-            
-            if (cyclesLeft <= 0) {
-                completed.add(stationName);
-                completeExecution(stationName, currentCycle);
-            } else {
-                timers.put(stationName, cyclesLeft);
-            }
-        }
-        
-        // Remove completed
-        for (String stationName : completed) {
-            timers.remove(stationName);
-            instrTypes.remove(stationName);
-            destRegs.remove(stationName);
         }
     }
     
@@ -150,42 +198,58 @@ public class ExecutionUnit {
         // Simulate result
         double result = simulateResult(stationName, instrType);
         
-        // Create broadcast request
+        // CRITICAL FIX: Create broadcast request with completion cycle
+        // The broadcast will happen in the NEXT cycle (currentCycle + 1)
+        // This ensures write-back happens AFTER execution completes, not in the same cycle
         BroadcastRequest request = new BroadcastRequest(
             rsId,          // Still use RS ID for BroadcastRequest
             result,
             destReg,
             instrType
         );
+        // Mark this request as ready for broadcast in the next cycle
+        request.setReadyCycle(currentCycle + 1);
         
-        // Add to CDB
+        // Add to CDB (will be processed in next cycle)
         CommonDataBus.getInstance().addBroadcastRequest(request);
         
         System.out.println(String.format(
-            "[EXECUTE] Cycle %d: Completed %s in %s -> result = %.2f",
-            currentCycle, instrType, stationName, result
+            "[EXECUTE] Cycle %d: Completed %s in %s -> result = %.2f (will broadcast in cycle %d)",
+            currentCycle, instrType, stationName, result, currentCycle + 1
         ));
     }
     
     private double simulateResult(String stationName, String instrType) {
-        // Base on station name hash
-        int base = Math.abs(stationName.hashCode() % 100);
-        Random rand = new Random(stationName.hashCode());
-        
-        switch (instrType) {
-            case "ADD.D": case "ADD.S":
-                return base + 10.5 + rand.nextDouble();
-            case "SUB.D": case "SUB.S":
-                return base + 20.5 + rand.nextDouble();
-            case "MUL.D": case "MUL.S":
-                return base + 30.5 + rand.nextDouble();
-            case "DIV.D": case "DIV.S":
-                return base + 40.5 + rand.nextDouble();
-            case "DADDI": case "DSUBI":
-                return base + 50.5 + rand.nextDouble();
-            default:
-                return base + rand.nextDouble();
+        // Get actual operand values from reservation station
+        ReservationStation rs = rsPool.getStationByName(stationName);
+        if (rs == null || rs.getVj() == null) {
+            System.err.println("Warning: Cannot get operands for " + stationName + ", using 0.0");
+            return 0.0;
         }
+        
+        double vj = rs.getVj();
+        double vk = (rs.getVk() != null) ? rs.getVk() : 0.0;
+        Integer immediate = rs.getA();
+        
+        // Perform actual arithmetic operations
+        return switch (instrType) {
+            case "ADD.D", "ADD.S" -> vj + vk;
+            case "SUB.D", "SUB.S" -> vj - vk;
+            case "MUL.D", "MUL.S" -> vj * vk;
+            case "DIV.D", "DIV.S" -> {
+                if (vk == 0.0) {
+                    System.err.println("Warning: Division by zero in " + stationName);
+                    yield 0.0;
+                }
+                yield vj / vk;
+            }
+            case "DADDI" -> vj + (immediate != null ? immediate : 0);
+            case "DSUBI" -> vj - (immediate != null ? immediate : 0);
+            default -> {
+                System.err.println("Warning: Unknown instruction type " + instrType + " in " + stationName);
+                yield vj;
+            }
+        };
     }
     
     // Helper: Convert RS ID to station name (your friends' convention)
@@ -231,9 +295,24 @@ public class ExecutionUnit {
         instrTypes.clear();
         destRegs.clear();
         currentCycle = 0;
+        // NOTE: Do NOT clear latencies - they are user-configured and should persist
+        // latencies.clear(); // <-- DO NOT UNCOMMENT - latencies must persist across resets
     }
     
     public int getCurrentCycle() {
         return currentCycle;
+    }
+    
+    /**
+     * Check if instruction is a memory operation (load/store)
+     * Memory operations execute via MemorySystem, not ExecutionUnit
+     */
+    private boolean isMemoryOperation(String op) {
+        if (op == null) return false;
+        String upperOp = op.toUpperCase();
+        return upperOp.equals("LW") || upperOp.equals("LD") || 
+               upperOp.equals("L.S") || upperOp.equals("L.D") ||
+               upperOp.equals("SW") || upperOp.equals("SD") || 
+               upperOp.equals("S.S") || upperOp.equals("S.D");
     }
 }

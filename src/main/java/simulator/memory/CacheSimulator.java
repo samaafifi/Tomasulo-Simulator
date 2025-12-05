@@ -43,12 +43,6 @@ public class CacheSimulator {
         CacheBlock block = lines[index];
         return block.isValid() && block.getTag() == tag;
     }
-    /** True if the given address belongs to the block stored at this index */
-private boolean blockContainsAddress(int address, int index, int tag) {
-    long blockNum = tag * (long) numLines + index;
-    long blockStart = blockNum * (long) blockSize;
-    return address >= blockStart && address < blockStart + blockSize;
-}
 
     /** 
      * Read a 4-byte WORD from cache (LW, L.S).

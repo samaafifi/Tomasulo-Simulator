@@ -26,19 +26,13 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
     
     /**
      * Broadcast results (processes CDB broadcasts)
+     * This is a convenience method that processes broadcasts for cycle 0.
+     * For proper cycle tracking, use processBroadcastsForCycle() instead.
      */
     public void broadcast() {
-        // Process broadcasts for current cycle
-        CommonDataBus cdb = CommonDataBus.getInstance();
-        List<BroadcastRequest> broadcasts = cdb.processBroadcasts(0); // Use 0 as default cycle
-        
-        for (BroadcastRequest request : broadcasts) {
-            onBroadcast(
-                request.getRsId(),
-                request.getResult(),
-                request.getDestReg()
-            );
-        }
+        // Process any pending broadcasts (using cycle 0 as default)
+        // Note: processBroadcastsForCycle() is preferred for proper cycle tracking
+        processBroadcastsForCycle(0);
     }
     
     @Override
@@ -56,15 +50,33 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
             String destRegName = convertToRegName(destRegister);
             
             // 1. Update Register File
+            // CRITICAL FIX: Check if register's Qi still points to this station (WAW hazard handling)
+            // If a later instruction has already updated the Qi, this write should be ignored
+            // Only update if Qi matches this station (or if Qi is null, meaning no pending write)
             if (destRegName != null && registerFile != null) {
+                String currentQi = registerFile.getQi(destRegName);
+                if (stationName.equals(currentQi)) {
+                    // Qi still points to this station - safe to update
                 registerFile.writeValue(destRegName, result);
                 System.out.println("  ✓ Updated " + destRegName + " = " + result);
+                } else if (currentQi == null || currentQi.isEmpty()) {
+                    // No pending write - safe to update (shouldn't happen in normal flow, but handle gracefully)
+                    registerFile.writeValue(destRegName, result);
+                    System.out.println("  ✓ Updated " + destRegName + " = " + result + " (no pending write)");
+                } else {
+                    // Qi points to a different station - this is a WAW scenario
+                    // A later instruction has already claimed this register - ignore this write
+                    System.out.println("  ⚠ Skipped update of " + destRegName + " - WAW: Qi now points to " + currentQi + " (not " + stationName + ")");
+                }
             }
             
-            // 2. Update RAT
+            // 2. Update RAT - only clear if we actually updated the register
             if (rat != null && destRegName != null) {
+                String currentQi = registerFile.getQi(destRegName);
+                if (stationName.equals(currentQi)) {
                 rat.clear(destRegName);
                 System.out.println("  ✓ Cleared RAT for " + destRegName);
+                }
             }
             
             // 3. Update waiting stations using STATION NAME
@@ -82,20 +94,21 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
     }
     
     private String convertToRegName(int regNum) {
-        // Simple mapping for tests
-        if (regNum == 2) return "F2";
-        if (regNum == 3) return "F3";
-        if (regNum == 10) return "F10";
-        if (regNum == 11) return "F11";
-        if (regNum == 20) return "F20";
-        if (regNum == 21) return "R21";
-        if (regNum == 22) return "F22";
-        
-        // General mapping
-        if (regNum < 32) return "F" + regNum;
-        else if (regNum < 64) return "R" + (regNum - 32);
-        else if (regNum < 100) return "R" + regNum;
-        else return "R" + (regNum - 100);
+        // F0-F31: regNum 0-31 (floating point registers)
+        if (regNum >= 0 && regNum < 32) {
+            return "F" + regNum;
+        }
+        // R0-R31: regNum 32-63 (integer registers, mapped as regNum - 32)
+        else if (regNum >= 32 && regNum < 64) {
+            return "R" + (regNum - 32);
+        }
+        // Fallback for other mappings (legacy support)
+        else if (regNum < 100) {
+            return "R" + regNum;
+        }
+        else {
+            return "R" + (regNum - 100);
+        }
     }
     
     private void updateWaitingStations(String producerName, double result) {

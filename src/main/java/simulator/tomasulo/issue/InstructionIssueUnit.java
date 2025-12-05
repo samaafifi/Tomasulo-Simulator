@@ -1,7 +1,6 @@
 package simulator.tomasulo.issue;
 
 import java.util.*;
-import simulator.parser.*;
 import simulator.tomasulo.registerfile.*;
 import simulator.tomasulo.models.Instruction;
 import simulator.tomasulo.hazards.DataHazardHandler;
@@ -17,11 +16,11 @@ public class InstructionIssueUnit {
     private InstructionQueue instructionQueue;
     private RegisterFile registerFile;
     private DataHazardHandler hazardHandler;
+    private simulator.memory.MemorySystem memorySystem; // For load/store operations
     private int currentCycle;
     
     // Branch handling - NO PREDICTION
     private boolean branchPending = false;
-    private ReservationStation pendingBranch = null;
     
     private Map<Integer, Integer> issueCycles;
     
@@ -46,6 +45,7 @@ public class InstructionIssueUnit {
         this.rsPool = rsPool;
         this.instructionQueue = new InstructionQueue();
         this.registerFile = registerFile;
+        this.memorySystem = memorySystem;
         this.hazardHandler = new DataHazardHandler(registerFile);
         this.currentCycle = 0;
         this.issueCycles = new HashMap<>();
@@ -93,17 +93,75 @@ public class InstructionIssueUnit {
             return false;
         }
         
+        // CRITICAL FIX: Set station tag on instruction before calling DataHazardHandler
+        // This is required for register renaming - the destination register's Qi must
+        // point to the reservation station that will produce its value
+        instruction.setStationTag(rs.getName());
+        
         // Issue the instruction
         issueToReservationStation(instruction, rs);
         
-        // Use DataHazardHandler
+        // Use DataHazardHandler for register renaming (sets destination Qi)
+        // NOTE: For memory operations, operand setup is already done in issueToReservationStation()
+        // For non-memory operations, updateReservationStationOperands will set Vj/Vk/Qj/Qk correctly
         DataHazardHandler.SourceOperands operands = hazardHandler.handleIssue(instruction);
+        if (!instruction.isMemoryOperation()) {
+            // Only update operands for non-memory operations
+            // Memory operations (loads/stores) are already set up correctly in issueToReservationStation()
         updateReservationStationOperands(rs, operands);
+        }
+        
+        // CRITICAL FIX: Issue load/store instructions to MemorySystem
+        // For loads: issue immediately if base register is ready
+        // For stores: issue immediately only if BOTH base register AND source register are ready
+        // Otherwise, stores will be issued later when they become ready (handled in SimulationController)
+        if (memorySystem != null && instruction.isMemoryOperation()) {
+            try {
+                String op = instruction.getOperation();
+                    
+                    if (isLoadInstruction(op)) {
+                    // Loads: issue if base register is ready (stored in Vj after issueToReservationStation)
+                    Double baseValueObj = rs.getVj();
+                    Integer offset = instruction.getOffset();
+                    
+                    if (baseValueObj != null && offset != null) {
+                        int baseValue = baseValueObj.intValue();
+                        String destReg = instruction.getDestRegister();
+                        memorySystem.issueLoad(op, baseValue, offset, destReg);
+                        System.out.println("  → Issued to MemorySystem: " + op + " " + destReg + 
+                                         " from address " + (baseValue + offset));
+                    } else {
+                        System.out.println("  → Load waiting for base register (will issue when ready)");
+                    }
+                    } else if (isStoreInstruction(op)) {
+                    // Stores: issue only if BOTH base register (Vj) AND source register (Vk) are ready
+                    // After fix: base register -> Vj/Qj, source register -> Vk/Qk
+                    Double baseValueObj = rs.getVj();
+                    Double srcValueObj = rs.getVk();
+                    Integer offset = instruction.getOffset();
+                    
+                    if (baseValueObj != null && srcValueObj != null && offset != null) {
+                        // Both operands ready - issue immediately
+                        int baseValue = baseValueObj.intValue();
+                        long value = srcValueObj.longValue();
+                                memorySystem.issueStore(op, baseValue, offset, value);
+                        System.out.println("  → Issued to MemorySystem: " + op + 
+                                         " to address " + (baseValue + offset) + " (value: " + value + ")");
+                            } else {
+                        // Store will wait for operands - will be issued later when ready
+                        // (handled in SimulationController after CDB broadcasts)
+                        System.out.println("  → Store waiting for operands (base=" + (baseValueObj != null) + 
+                                         ", source=" + (srcValueObj != null) + ")");
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("  ✗ Error issuing memory operation: " + e.getMessage());
+            }
+        }
         
         // Check if this is a branch instruction
         if (isBranchInstruction(instruction)) {
             branchPending = true;
-            pendingBranch = rs;
             System.out.println("Cycle " + currentCycle + ": Branch issued - stalling further issue");
         }
         
@@ -157,17 +215,27 @@ public class InstructionIssueUnit {
             return false;
         }
         
+        // CRITICAL FIX: Set station tag on instruction before calling DataHazardHandler
+        // This is required for register renaming - the destination register's Qi must
+        // point to the reservation station that will produce its value
+        instruction.setStationTag(rs.getName());
+        
         // Issue the instruction
         issueToReservationStation(instruction, rs);
         
-        // Use DataHazardHandler
+        // Use DataHazardHandler for register renaming (sets destination Qi)
+        // NOTE: For memory operations, operand setup is already done in issueToReservationStation()
+        // For non-memory operations, updateReservationStationOperands will set Vj/Vk/Qj/Qk correctly
         DataHazardHandler.SourceOperands operands = hazardHandler.handleIssue(instruction);
+        if (!instruction.isMemoryOperation()) {
+            // Only update operands for non-memory operations
+            // Memory operations (loads/stores) are already set up correctly in issueToReservationStation()
         updateReservationStationOperands(rs, operands);
+        }
         
         // Check if this is a branch instruction
         if (isBranchInstruction(instruction)) {
             branchPending = true;
-            pendingBranch = rs;
             System.out.println("Cycle " + currentCycle + ": Branch issued - stalling further issue");
         }
         
@@ -191,11 +259,28 @@ public class InstructionIssueUnit {
     }
     
     /**
+     * Check if instruction is a load
+     */
+    private boolean isLoadInstruction(String op) {
+        String upperOp = op.toUpperCase();
+        return upperOp.equals("LW") || upperOp.equals("LD") || 
+               upperOp.equals("L.S") || upperOp.equals("L.D");
+    }
+    
+    /**
+     * Check if instruction is a store
+     */
+    private boolean isStoreInstruction(String op) {
+        String upperOp = op.toUpperCase();
+        return upperOp.equals("SW") || upperOp.equals("SD") || 
+               upperOp.equals("S.S") || upperOp.equals("S.D");
+    }
+    
+    /**
      * Called when branch resolves - clears branch pending flag
      */
     public void resolveBranch() {
         branchPending = false;
-        pendingBranch = null;
         System.out.println("Cycle " + currentCycle + ": Branch resolved - resuming issue");
     }
     
@@ -211,48 +296,92 @@ public class InstructionIssueUnit {
         rs.setOp(instruction.getOperation());
         rs.setInstruction(instruction);
         
+        // CRITICAL FIX: For memory operations, handle base register and source registers correctly
+        // For stores: base register -> Vj/Qj (address), source register (data) -> Vk/Qk
+        // For loads: base register -> Vj/Qj (address), no source register needed
+        if (instruction.isMemoryOperation()) {
+            String baseReg = instruction.getBaseRegister();
+            if (baseReg != null && !baseReg.isEmpty()) {
+                String producer = registerFile.getRegisterStatus(baseReg);
+                if (producer != null && !producer.equals("")) {
+                    // Base register is busy, waiting for producer
+                    rs.setQj(producer);
+                    rs.setVj(null);
+                } else if (registerFile.isRegisterReady(baseReg)) {
+                    // Base register is ready, can read value
+                    rs.setVj(registerFile.getRegisterValue(baseReg));
+                    rs.setQj(null);
+                } else {
+                    // Base register is busy but no producer tag (shouldn't happen, but handle gracefully)
+                    rs.setQj(null);
+                    rs.setVj(null);
+                }
+            }
+            rs.setA(instruction.getOffset());
+            
+            // For STORES: source register (data to store) goes to Vk/Qk
+            if (isStoreInstruction(instruction.getOperation())) {
+                String srcReg = instruction.getSourceRegister1(); // Data register for stores
+                if (srcReg != null && !srcReg.isEmpty()) {
+                    String producer = registerFile.getRegisterStatus(srcReg);
+                    if (producer != null && !producer.equals("")) {
+                        // Source register is busy, waiting for producer
+                        rs.setQk(producer);
+                        rs.setVk(null);
+                    } else if (registerFile.isRegisterReady(srcReg)) {
+                        // Source register is ready, can read value
+                        rs.setVk(registerFile.getRegisterValue(srcReg));
+                        rs.setQk(null);
+                    } else {
+                        // Source register is busy but no producer tag (shouldn't happen, but handle gracefully)
+                        rs.setQk(null);
+                        rs.setVk(null);
+                    }
+                }
+            }
+            // For LOADS: no source register needed (destination is set by DataHazardHandler)
+        } else {
+            // Non-memory operations: handle src1 and src2 normally
         String src1 = instruction.getSourceRegister1();
         String src2 = instruction.getSourceRegister2();
         
         if (src1 != null && !src1.isEmpty()) {
             String producer = registerFile.getRegisterStatus(src1);
             if (producer != null && !producer.equals("")) {
+                // Register is busy, waiting for producer
                 rs.setQj(producer);
                 rs.setVj(null);
-            } else {
+            } else if (registerFile.isRegisterReady(src1)) {
+                // Register is ready, can read value
                 rs.setVj(registerFile.getRegisterValue(src1));
                 rs.setQj(null);
+            } else {
+                // Register is busy but no producer tag (shouldn't happen, but handle gracefully)
+                rs.setQj(null);
+                rs.setVj(null);
             }
         }
         
         if (src2 != null && !src2.isEmpty()) {
             String producer = registerFile.getRegisterStatus(src2);
             if (producer != null && !producer.equals("")) {
+                // Register is busy, waiting for producer
                 rs.setQk(producer);
                 rs.setVk(null);
-            } else {
+            } else if (registerFile.isRegisterReady(src2)) {
+                // Register is ready, can read value
                 rs.setVk(registerFile.getRegisterValue(src2));
                 rs.setQk(null);
+            } else {
+                // Register is busy but no producer tag (shouldn't happen, but handle gracefully)
+                rs.setQk(null);
+                rs.setVk(null);
             }
         }
         
         if (instruction.hasImmediate()) {
             rs.setA(instruction.getImmediate());
         }
-        
-        if (instruction.isMemoryOperation()) {
-            String baseReg = instruction.getBaseRegister();
-            if (baseReg != null && !baseReg.isEmpty()) {
-                String producer = registerFile.getRegisterStatus(baseReg);
-                if (producer != null && !producer.equals("")) {
-                    rs.setQj(producer);
-                    rs.setVj(null);
-                } else {
-                    rs.setVj(registerFile.getRegisterValue(baseReg));
-                    rs.setQj(null);
-                }
-            }
-            rs.setA(instruction.getOffset());
         }
     }
     
@@ -346,7 +475,6 @@ public class InstructionIssueUnit {
         currentCycle = 0;
         issueCycles.clear();
         branchPending = false;
-        pendingBranch = null;
     }
     
     public DataHazardHandler getHazardHandler() {

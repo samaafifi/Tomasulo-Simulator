@@ -98,9 +98,17 @@ import simulator.tomasulo.models.Instruction;
             return false;
         }
         
-        // For memory operations, we only need base address ready
+        // For memory operations:
+        // - LOADS: only need base address ready (Qj null)
+        // - STORES: need both base address (Qj null) AND source data (Qk null)
         if (isMemoryOperation()) {
+            if (type.equals("STORE")) {
+                // Stores need both base address (Qj) and source data (Qk) ready
+                return (qj == null || qj.equals("")) && (qk == null || qk.equals(""));
+            } else {
+                // Loads only need base address ready
             return qj == null || qj.equals("");
+            }
         }
         
         // For compute operations, both operands must be ready

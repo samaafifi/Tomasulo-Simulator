@@ -1,6 +1,5 @@
-package simulator;
+package simulator.tomasulo.execute;
 
-import simulator.tomasulo.execute.*;
 import simulator.tomasulo.issue.*;
 import simulator.tomasulo.registerfile.*;
 import java.util.*;
@@ -24,7 +23,8 @@ public class IntegratedSimulationEngine {
         initializeComponents();
         currentCycle = 0;
         instructionLatencies = new HashMap<>();
-        setDefaultLatencies();
+        // REMOVED: setDefaultLatencies() - NO HARDCODED VALUES
+        // All latencies must be configured by user via GUI
     }
     
     private void initializeComponents() {
@@ -51,24 +51,9 @@ public class IntegratedSimulationEngine {
         }
     }
     
-    private void setDefaultLatencies() {
-        instructionLatencies.put("DADDI", 1);
-        instructionLatencies.put("DSUBI", 1);
-        instructionLatencies.put("ADD.D", 2);
-        instructionLatencies.put("SUB.D", 2);
-        instructionLatencies.put("MUL.D", 10);
-        instructionLatencies.put("DIV.D", 40);
-        instructionLatencies.put("LW", 2);
-        instructionLatencies.put("LD", 2);
-        instructionLatencies.put("L.S", 2);
-        instructionLatencies.put("L.D", 2);
-        instructionLatencies.put("SW", 2);
-        instructionLatencies.put("SD", 2);
-        instructionLatencies.put("S.S", 2);
-        instructionLatencies.put("S.D", 2);
-        instructionLatencies.put("BEQ", 1);
-        instructionLatencies.put("BNE", 1);
-    }
+    // REMOVED: setDefaultLatencies() method
+    // NO HARDCODED VALUES - All latencies must be configured by user via GUI
+    // This ensures compliance with the requirement: "NO HARDCODE - ALL VALUES ARE INPUTS BY THE USER"
     
     public void runOneCycle() {
         currentCycle++;
@@ -139,7 +124,14 @@ public class IntegratedSimulationEngine {
             rs.setOp(instructionType);
             
             // Start execution
-            int latency = instructionLatencies.getOrDefault(instructionType, 1);
+            // NO HARDCODED DEFAULT - user must configure latency via GUI
+            Integer latencyObj = instructionLatencies.get(instructionType);
+            if (latencyObj == null) {
+                System.err.println("ERROR: Latency not configured for " + instructionType + 
+                    " - user must set latency via GUI before simulation!");
+                return; // Cannot execute without configured latency
+            }
+            int latency = latencyObj;
             executionUnit.startExecution(rs.getName(), instructionType, destReg, latency, currentCycle);
             
             System.out.println("✓ Instruction issued to " + rs.getName());

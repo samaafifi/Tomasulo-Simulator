@@ -1,5 +1,6 @@
 package simulator.tomasulo.execute;
 
+import simulator.tomasulo.issue.*;
 import java.util.*;
 
 public class ExecutionUnit {
@@ -7,9 +8,61 @@ public class ExecutionUnit {
     private Map<String, Integer> timers = new HashMap<>(); // Station Name -> cycles left
     private Map<String, String> instrTypes = new HashMap<>(); // Station Name -> instruction type
     private Map<String, Integer> destRegs = new HashMap<>(); // Station Name -> dest register
+    private Map<String, Integer> latencies = new HashMap<>(); // Instruction type -> latency
+    private ReservationStationPool rsPool; // Reference to reservation station pool
+    private int currentCycle = 0;
     
     public ExecutionUnit() {
-        // Initialize empty
+        // Initialize with default latencies
+        setDefaultLatencies();
+    }
+    
+    /**
+     * Set the reservation station pool (needed to check ready stations)
+     */
+    public void setReservationStationPool(ReservationStationPool rsPool) {
+        this.rsPool = rsPool;
+    }
+    
+    private void setDefaultLatencies() {
+        latencies.put("DADDI", 1);
+        latencies.put("DSUBI", 1);
+        latencies.put("ADD.D", 2);
+        latencies.put("SUB.D", 2);
+        latencies.put("MUL.D", 10);
+        latencies.put("DIV.D", 40);
+        latencies.put("LW", 2);
+        latencies.put("LD", 2);
+        latencies.put("L.S", 2);
+        latencies.put("L.D", 2);
+        latencies.put("SW", 2);
+        latencies.put("SD", 2);
+        latencies.put("S.S", 2);
+        latencies.put("S.D", 2);
+        latencies.put("BEQ", 1);
+        latencies.put("BNE", 1);
+    }
+    
+    /**
+     * Set latency for an instruction type
+     */
+    public void setLatency(String instructionType, int latency) {
+        latencies.put(instructionType.toUpperCase(), latency);
+    }
+    
+    /**
+     * Get latency for an instruction type
+     */
+    public int getLatency(String instructionType) {
+        return latencies.getOrDefault(instructionType.toUpperCase(), 1);
+    }
+    
+    /**
+     * Execute one cycle (without cycle parameter - uses internal counter)
+     */
+    public void executeCycle() {
+        currentCycle++;
+        cycle(currentCycle);
     }
     
     // Start execution by station NAME (recommended)
@@ -33,9 +86,40 @@ public class ExecutionUnit {
     }
     
     public void cycle(int currentCycle) {
+        this.currentCycle = currentCycle;
+        
+        // First, check for ready stations that were issued in a PREVIOUS cycle
+        // and start their execution (ensures issue and execution start in different cycles)
+        if (rsPool != null) {
+            List<ReservationStation> readyStations = rsPool.getReadyStations();
+            for (ReservationStation rs : readyStations) {
+                // Only start execution if:
+                // 1. Execution hasn't started yet
+                // 2. Station was issued in a previous cycle (not current cycle)
+                if (!rs.isExecutionStarted() && rs.getIssueCycle() >= 0 && rs.getIssueCycle() < currentCycle) {
+                    String instrType = rs.getOp();
+                    int latency = getLatency(instrType);
+                    
+                    // Get destination register from instruction
+                    int destReg = 0;
+                    if (rs.getInstruction() != null) {
+                        String destRegStr = rs.getInstruction().getDestRegister();
+                        if (destRegStr != null && destRegStr.startsWith("F")) {
+                            destReg = Integer.parseInt(destRegStr.substring(1));
+                        } else if (destRegStr != null && destRegStr.startsWith("R")) {
+                            destReg = Integer.parseInt(destRegStr.substring(1)) + 32;
+                        }
+                    }
+                    
+                    startExecution(rs.getName(), instrType, destReg, latency, currentCycle);
+                    rs.startExecution(latency);
+                }
+            }
+        }
+        
         List<String> completed = new ArrayList<>();
         
-        // Decrement timers
+        // Decrement timers for stations already executing
         for (Map.Entry<String, Integer> entry : timers.entrySet()) {
             String stationName = entry.getKey();
             int cyclesLeft = entry.getValue() - 1;
@@ -146,5 +230,10 @@ public class ExecutionUnit {
         timers.clear();
         instrTypes.clear();
         destRegs.clear();
+        currentCycle = 0;
+    }
+    
+    public int getCurrentCycle() {
+        return currentCycle;
     }
 }

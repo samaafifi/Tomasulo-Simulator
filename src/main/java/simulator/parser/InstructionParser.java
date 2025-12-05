@@ -17,6 +17,13 @@ public class InstructionParser {
         return parseInstructions(lines);
     }
 
+    /** Parse from a string (splits by newlines) */
+    public List<ParsedInstruction> parse(String code) {
+        String[] lines = code.split("\n");
+        List<String> lineList = Arrays.asList(lines);
+        return parseInstructions(lineList);
+    }
+
     /** Main parsing method – takes raw lines of assembly */
     public List<ParsedInstruction> parseInstructions(List<String> rawLines) {
         List<String> cleaned = cleanLines(rawLines);

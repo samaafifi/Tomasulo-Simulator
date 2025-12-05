@@ -7,7 +7,11 @@ public class CommonDataBus {
     private List<BroadcastListener> listeners;
     private CDBArbitration arbitration;
     
-    private CommonDataBus() {
+    /**
+     * Private constructor for singleton pattern
+     * Public constructor for non-singleton usage
+     */
+    public CommonDataBus() {
         this.listeners = new ArrayList<>();
         this.arbitration = new CDBArbitration();
     }

@@ -11,6 +11,10 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
     private RegisterFile registerFile;
     private RegisterAliasTable rat;
     
+    public BroadcastManager() {
+        // Default constructor - components will be set later if needed
+    }
+    
     public BroadcastManager(ReservationStationPool rsPool, 
                           RegisterFile registerFile, 
                           RegisterAliasTable rat) {
@@ -18,6 +22,23 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
         this.registerFile = registerFile;
         this.rat = rat;
         CommonDataBus.getInstance().registerListener(this);
+    }
+    
+    /**
+     * Broadcast results (processes CDB broadcasts)
+     */
+    public void broadcast() {
+        // Process broadcasts for current cycle
+        CommonDataBus cdb = CommonDataBus.getInstance();
+        List<BroadcastRequest> broadcasts = cdb.processBroadcasts(0); // Use 0 as default cycle
+        
+        for (BroadcastRequest request : broadcasts) {
+            onBroadcast(
+                request.getRsId(),
+                request.getResult(),
+                request.getDestReg()
+            );
+        }
     }
     
     @Override

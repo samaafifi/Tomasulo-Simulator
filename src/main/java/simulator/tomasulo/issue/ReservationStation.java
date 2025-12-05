@@ -35,6 +35,8 @@ import simulator.tomasulo.models.Instruction;
     private int remainingCycles;   // Cycles remaining for execution
     private Double result;         // Computed result
     private boolean resultReady;   // Is result ready to broadcast?
+    private int issueCycle = -1;   // Cycle when instruction was issued (-1 means not issued yet)
+    private boolean executionStarted = false; // Whether execution has started
     
     /**
      * Constructor
@@ -69,6 +71,8 @@ import simulator.tomasulo.models.Instruction;
     public Double getResult() { return result; }
     public boolean isResultReady() { return resultReady; }
     public Instruction getInstruction() { return instruction; }
+    public int getIssueCycle() { return issueCycle; }
+    public boolean isExecutionStarted() { return executionStarted; }
     
     // Setters
     public void setBusy(boolean busy) { this.busy = busy; }
@@ -82,6 +86,8 @@ import simulator.tomasulo.models.Instruction;
     public void setResult(Double result) { this.result = result; }
     public void setResultReady(boolean ready) { this.resultReady = ready; }
     public void setInstruction(Instruction instruction) { this.instruction = instruction; }
+    public void setIssueCycle(int cycle) { this.issueCycle = cycle; }
+    public void setExecutionStarted(boolean started) { this.executionStarted = started; }
     
     /**
      * Checks if the reservation station is ready to execute
@@ -137,6 +143,8 @@ import simulator.tomasulo.models.Instruction;
         this.result = null;
         this.resultReady = false;
         this.instruction = null;
+        this.issueCycle = -1;
+        this.executionStarted = false;
     }
     
     /**
@@ -144,6 +152,7 @@ import simulator.tomasulo.models.Instruction;
      */
     public void startExecution(int latency) {
         this.remainingCycles = latency;
+        this.executionStarted = true;
     }
     
     /**

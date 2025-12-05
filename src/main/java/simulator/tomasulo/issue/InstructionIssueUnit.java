@@ -37,6 +37,94 @@ public class InstructionIssueUnit {
     }
     
     /**
+     * Constructor that takes MemorySystem instead of InstructionQueue
+     * Creates an internal InstructionQueue
+     */
+    public InstructionIssueUnit(ReservationStationPool rsPool,
+                                RegisterFile registerFile,
+                                simulator.memory.MemorySystem memorySystem) {
+        this.rsPool = rsPool;
+        this.instructionQueue = new InstructionQueue();
+        this.registerFile = registerFile;
+        this.hazardHandler = new DataHazardHandler(registerFile);
+        this.currentCycle = 0;
+        this.issueCycles = new HashMap<>();
+    }
+    
+    /**
+     * Check if an instruction can be issued
+     */
+    public boolean canIssue(Instruction instruction) {
+        if (branchPending) {
+            return false;
+        }
+        
+        StructuralHazard hazard = checkStructuralHazard(instruction);
+        return !hazard.hasHazard();
+    }
+    
+    /**
+     * Issue a specific instruction directly (without adding to queue first)
+     */
+    public boolean issue(Instruction instruction) {
+        if (!canIssue(instruction)) {
+            return false;
+        }
+        
+        // NO PREDICTION: Stall issue if branch is pending
+        if (branchPending) {
+            System.out.println("Cycle " + currentCycle + ": Issue stalled - waiting for branch resolution");
+            return false;
+        }
+        
+        // Check for structural hazard
+        StructuralHazard hazard = checkStructuralHazard(instruction);
+        if (hazard.hasHazard()) {
+            System.out.println("Cycle " + currentCycle + ": Structural hazard - " 
+                             + hazard.getMessage());
+            return false;
+        }
+        
+        // Get reservation station
+        String rsType = determineReservationStationType(instruction);
+        ReservationStation rs = rsPool.allocateStation(rsType);
+        
+        if (rs == null) {
+            return false;
+        }
+        
+        // Issue the instruction
+        issueToReservationStation(instruction, rs);
+        
+        // Use DataHazardHandler
+        DataHazardHandler.SourceOperands operands = hazardHandler.handleIssue(instruction);
+        updateReservationStationOperands(rs, operands);
+        
+        // Check if this is a branch instruction
+        if (isBranchInstruction(instruction)) {
+            branchPending = true;
+            pendingBranch = rs;
+            System.out.println("Cycle " + currentCycle + ": Branch issued - stalling further issue");
+        }
+        
+        issueCycles.put(instruction.getId(), currentCycle);
+        instruction.setIssueCycle(currentCycle);
+        rs.setIssueCycle(currentCycle); // Track issue cycle in reservation station
+        
+        System.out.println("Cycle " + currentCycle + ": Issued " 
+                         + instruction.toString() + " to " + rs.getName());
+        
+        return true;
+    }
+    
+    /**
+     * Add instructions to the queue
+     */
+    public void addInstructions(List<Instruction> instructions) {
+        instructionQueue.enqueueAll(instructions);
+    }
+    
+    /**
      * Attempts to issue the next instruction
      * NO BRANCH PREDICTION: If branch is pending, stall issue until branch resolves
      */
@@ -85,6 +173,7 @@ public class InstructionIssueUnit {
         
         issueCycles.put(instruction.getId(), currentCycle);
         instruction.setIssueCycle(currentCycle);
+        rs.setIssueCycle(currentCycle); // Track issue cycle in reservation station
         instructionQueue.dequeue();
         
         System.out.println("Cycle " + currentCycle + ": Issued " 

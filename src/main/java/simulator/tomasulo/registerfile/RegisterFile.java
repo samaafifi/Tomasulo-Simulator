@@ -192,4 +192,46 @@ public class RegisterFile implements IRegisterFile {
             setQi(registerName, stationTag);
         }
     }
+    
+    /**
+     * Set register value (convenience method that accepts double or int)
+     */
+    public void setRegisterValue(String registerName, double value) {
+        writeValue(registerName, value);
+    }
+    
+    public void setRegisterValue(String registerName, int value) {
+        writeValue(registerName, (double)value);
+    }
+    
+    /**
+     * Print all registers and their values
+     */
+    public void printAllRegisters() {
+        System.out.println("\n=== Register File ===");
+        Map<String, Register> allRegs = getAllRegisters();
+        
+        // Print floating point registers
+        System.out.println("\nFloating Point Registers (F0-F31):");
+        for (int i = 0; i < 32; i++) {
+            String name = "F" + i;
+            Register reg = allRegs.get(name);
+            if (reg != null) {
+                String status = reg.isBusy() ? " (waiting for " + reg.getQi() + ")" : "";
+                System.out.println(String.format("  %s: %.2f%s", name, reg.getValue(), status));
+            }
+        }
+        
+        // Print integer registers
+        System.out.println("\nInteger Registers (R0-R31):");
+        for (int i = 0; i < 32; i++) {
+            String name = "R" + i;
+            Register reg = allRegs.get(name);
+            if (reg != null) {
+                String status = reg.isBusy() ? " (waiting for " + reg.getQi() + ")" : "";
+                System.out.println(String.format("  %s: %.2f%s", name, reg.getValue(), status));
+            }
+        }
+        System.out.println();
+    }
 }

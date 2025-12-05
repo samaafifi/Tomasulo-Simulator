@@ -36,6 +36,18 @@ public class MemorySystem {
         }
     }
 
+    // Default constructor with reasonable defaults
+    public MemorySystem() {
+        this(1024 * 1024,      // 1MB memory
+             64 * 1024,        // 64KB cache
+             64,               // 64 byte blocks
+             1,                // 1 cycle hit latency
+             10,               // 10 cycle miss penalty
+             2,                // 2 cycle load latency
+             2,                // 2 cycle store latency
+             8);               // 8 entry LSB
+    }
+
     public MemorySystem(int memorySizeBytes,
                         int cacheSizeBytes,
                         int blockSize,
@@ -231,5 +243,27 @@ public class MemorySystem {
         lsb.clear();
         cache.resetStats();
         // Memory contents preserved unless explicitly cleared
+    }
+
+    // ============= DOUBLE PRECISION OPERATIONS ============= //
+
+    /**
+     * Write a double precision floating point value to memory (8 bytes)
+     */
+    public void writeDouble(int address, double value) {
+        long longValue = Double.doubleToLongBits(value);
+        // Write as two 4-byte words (little-endian)
+        memory.writeWord(address, (int)(longValue & 0xFFFFFFFFL));
+        memory.writeWord(address + 4, (int)((longValue >> 32) & 0xFFFFFFFFL));
+    }
+
+    /**
+     * Read a double precision floating point value from memory (8 bytes)
+     */
+    public double readDouble(int address) {
+        int low = memory.readWord(address);
+        int high = memory.readWord(address + 4);
+        long longValue = ((long)high << 32) | (low & 0xFFFFFFFFL);
+        return Double.longBitsToDouble(longValue);
     }
 }

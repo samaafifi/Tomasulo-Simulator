@@ -26,9 +26,9 @@ public class LoadStoreBuffer {
 
     // Memory system needed for commit
     private final CacheSimulator cache;
-     private final int maxSize;  // ← ADD THIS FIELD
+    private final int maxSize;  // Maximum size of buffer
 
-    // ← ADD THIS CONSTRUCTOR (with maxSize)
+    // Constructor with maxSize parameter
     public LoadStoreBuffer(CacheSimulator cache, int maxSize) {
         this.cache = cache;
         this.maxSize = maxSize;

@@ -1,22 +1,5 @@
 package simulator.memory;
 
-/**
- * Cache Simulator - Direct-Mapped Cache with Write-Back Policy
- * 
- * Address Mapping:
- * ┌─────────────────────────────────────┐
- * │  TAG  │  INDEX  │  OFFSET  │
- * └─────────────────────────────────────┘
- * 
- * - OFFSET: log2(blockSize) bits - byte position within block
- * - INDEX: log2(numLines) bits - which cache line
- * - TAG: remaining bits - stored with block for validation
- * 
- * Example (32-bit address, 16-byte blocks, 64 cache lines):
- * - OFFSET: 4 bits (0-15)
- * - INDEX: 6 bits (0-63)
- * - TAG: 22 bits
- */
 public class CacheSimulator {
     private final CacheBlock[] lines;   // direct-mapped cache lines
     private final int blockSize;

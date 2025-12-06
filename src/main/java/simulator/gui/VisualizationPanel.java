@@ -22,6 +22,7 @@ public class VisualizationPanel {
     // Tables
     private TableView<InstructionStatusRow> instructionStatusTable;
     private TableView<RegisterRow> registerTable;
+    private TableView<CacheRow> cacheTable;
     private TableView<LSBRow> loadBufferTable;
     private TableView<LSBRow> storeBufferTable;
     // Note: rsTablesByType was intended for future use but is currently unused
@@ -55,11 +56,13 @@ public class VisualizationPanel {
         VBox rightPanel = new VBox(15); // Increased spacing
         rightPanel.setPadding(new Insets(5));
         
-        // Top row: Register File
+        // Top row: Register File and Cache
         HBox topRow = new HBox(10); // Increased spacing
         VBox registerBox = createRegisterFileSection();
+        VBox cacheBox = createCacheSection();
         HBox.setHgrow(registerBox, Priority.ALWAYS);
-        topRow.getChildren().add(registerBox);
+        HBox.setHgrow(cacheBox, Priority.ALWAYS);
+        topRow.getChildren().addAll(registerBox, cacheBox);
         
         // Middle rows: Reservation Stations (grouped by type)
         rsSectionContainer = createReservationStationsSection();
@@ -152,6 +155,22 @@ public class VisualizationPanel {
         return vbox;
     }
     
+    private VBox createCacheSection() {
+        VBox vbox = new VBox(3);
+        vbox.setPadding(new Insets(3));
+        vbox.setStyle("-fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 3;");
+        
+        Label label = new Label("Cache State");
+        label.setFont(Font.font("Arial", FontWeight.BOLD, 11));
+        cacheTable = createCacheTable();
+        cacheTable.setPrefHeight(150);
+        cacheTable.setMinHeight(120);
+        VBox.setVgrow(cacheTable, Priority.SOMETIMES);
+        
+        vbox.getChildren().addAll(label, cacheTable);
+        return vbox;
+    }
+    
     private VBox createLoadBufferSection() {
         VBox vbox = new VBox(3);
         vbox.setPadding(new Insets(3));
@@ -205,6 +224,35 @@ public class VisualizationPanel {
         
         this.rsSectionContainer = vbox;
         return vbox;
+    }
+    
+    private TableView<CacheRow> createCacheTable() {
+        TableView<CacheRow> table = new TableView<>();
+        
+        TableColumn<CacheRow, String> indexCol = new TableColumn<>("Index");
+        indexCol.setCellValueFactory(data -> data.getValue().indexProperty());
+        indexCol.setPrefWidth(50);
+        
+        TableColumn<CacheRow, String> validCol = new TableColumn<>("V");
+        validCol.setCellValueFactory(data -> data.getValue().validProperty());
+        validCol.setPrefWidth(30);
+        
+        TableColumn<CacheRow, String> dirtyCol = new TableColumn<>("D");
+        dirtyCol.setCellValueFactory(data -> data.getValue().dirtyProperty());
+        dirtyCol.setPrefWidth(30);
+        
+        TableColumn<CacheRow, String> tagCol = new TableColumn<>("Tag");
+        tagCol.setCellValueFactory(data -> data.getValue().tagProperty());
+        tagCol.setPrefWidth(80);
+        
+        TableColumn<CacheRow, String> dataCol = new TableColumn<>("Data (First 16 bytes)");
+        dataCol.setCellValueFactory(data -> data.getValue().dataProperty());
+        dataCol.setPrefWidth(200);
+        
+        table.getColumns().addAll(indexCol, validCol, dirtyCol, tagCol, dataCol);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        
+        return table;
     }
     
     private TableView<RegisterRow> createRegisterTable() {
@@ -271,6 +319,7 @@ public class VisualizationPanel {
     public void update() {
         updateInstructionStatusTable();
         updateRegisterTable();
+        updateCacheTable();
         updateLoadBufferTable();
         updateStoreBufferTable();
         updateReservationStationsTables();
@@ -378,6 +427,47 @@ public class VisualizationPanel {
         }
         
         return sb.toString();
+    }
+    
+    private void updateCacheTable() {
+        cacheTable.getItems().clear();
+        
+        // Get cache blocks from memory system
+        var memorySystem = controller.getMemorySystem();
+        if (memorySystem == null) return;
+        
+        var cache = memorySystem.getCacheSimulator();
+        if (cache == null) return;
+        
+        // Get cache lines (only show non-empty or recently accessed ones)
+        int numLines = cache.getNumLines();
+        int displayLimit = Math.min(numLines, 16); // Show max 16 lines to avoid clutter
+        
+        for (int i = 0; i < displayLimit; i++) {
+            var block = cache.getCacheLine(i);
+            if (block == null) continue;
+            
+            CacheRow row = new CacheRow();
+            row.setIndex(String.valueOf(i));
+            row.setValid(block.isValid() ? "1" : "0");
+            row.setDirty(block.isDirty() ? "1" : "0");
+            row.setTag(block.isValid() ? String.format("0x%X", block.getTag()) : "");
+            
+            // Show first 16 bytes of block data as hex
+            if (block.isValid()) {
+                byte[] data = block.readBytes(0, Math.min(16, block.getBlockSize()));
+                StringBuilder hexStr = new StringBuilder();
+                for (int j = 0; j < data.length; j++) {
+                    if (j > 0 && j % 4 == 0) hexStr.append(" ");
+                    hexStr.append(String.format("%02X", data[j]));
+                }
+                row.setData(hexStr.toString());
+            } else {
+                row.setData("");
+            }
+            
+            cacheTable.getItems().add(row);
+        }
     }
     
     private void updateRegisterTable() {
@@ -691,6 +781,34 @@ public class VisualizationPanel {
         public String getWriteResult() { return writeResult.get(); }
         public void setWriteResult(String value) { writeResult.set(value); }
         public javafx.beans.property.StringProperty writeResultProperty() { return writeResult; }
+    }
+    
+    public static class CacheRow {
+        private javafx.beans.property.SimpleStringProperty index = new javafx.beans.property.SimpleStringProperty();
+        private javafx.beans.property.SimpleStringProperty valid = new javafx.beans.property.SimpleStringProperty();
+        private javafx.beans.property.SimpleStringProperty dirty = new javafx.beans.property.SimpleStringProperty();
+        private javafx.beans.property.SimpleStringProperty tag = new javafx.beans.property.SimpleStringProperty();
+        private javafx.beans.property.SimpleStringProperty data = new javafx.beans.property.SimpleStringProperty();
+        
+        public String getIndex() { return index.get(); }
+        public void setIndex(String value) { index.set(value); }
+        public javafx.beans.property.StringProperty indexProperty() { return index; }
+        
+        public String getValid() { return valid.get(); }
+        public void setValid(String value) { valid.set(value); }
+        public javafx.beans.property.StringProperty validProperty() { return valid; }
+        
+        public String getDirty() { return dirty.get(); }
+        public void setDirty(String value) { dirty.set(value); }
+        public javafx.beans.property.StringProperty dirtyProperty() { return dirty; }
+        
+        public String getTag() { return tag.get(); }
+        public void setTag(String value) { tag.set(value); }
+        public javafx.beans.property.StringProperty tagProperty() { return tag; }
+        
+        public String getData() { return data.get(); }
+        public void setData(String value) { data.set(value); }
+        public javafx.beans.property.StringProperty dataProperty() { return data; }
     }
     
     public static class RegisterRow {

@@ -103,8 +103,8 @@ public class ExecutionUnit {
     public void cycle(int currentCycle) {
         this.currentCycle = currentCycle;
         
-        // Clear stations that became ready last cycle (they can now start executing)
-        stationsJustReady.clear();
+        // NOTE: stationsJustReady is now cleared BEFORE write-back stage (in SimulationController)
+        // This ensures stations that receive operands in write-back stage don't start in same cycle
         
         // CRITICAL: Decrement timers FIRST for stations already executing
         // This ensures that if an instruction starts execution in cycle N with latency L,
@@ -169,7 +169,8 @@ public class ExecutionUnit {
                     if (isBranchOperation(instrType)) {
                         int branchLatency = getLatency(instrType);
                         if (branchLatency <= 0) {
-                            branchLatency = 1; // Default: branches complete in 1 cycle
+                            // NO DEFAULT - user must configure branch latency
+                            continue;
                         }
                         
                         // Get destination register from instruction (branches don't write to dest, but we need it for tracking)
@@ -352,6 +353,13 @@ public class ExecutionUnit {
      */
     public void markStationJustReady(String stationName) {
         stationsJustReady.add(stationName);
+    }
+    
+    /**
+     * Clear stationsJustReady set (called at start of cycle before write-back)
+     */
+    public void clearStationsJustReady() {
+        stationsJustReady.clear();
     }
     
     /**

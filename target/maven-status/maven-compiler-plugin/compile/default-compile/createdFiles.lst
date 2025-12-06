@@ -29,6 +29,7 @@ simulator\tomasulo\issue\InstructionQueue.class
 simulator\gui\VisualizationPanel$InstructionStatusRow.class
 simulator\memory\MemorySystem.class
 simulator\memory\CacheSimulator.class
+simulator\gui\VisualizationPanel$CacheRow.class
 simulator\gui\VisualizationPanel$LSBRow.class
 simulator\tomasulo\execute\WriteBackUnit.class
 simulator\tomasulo\execute\CDBArbitration.class

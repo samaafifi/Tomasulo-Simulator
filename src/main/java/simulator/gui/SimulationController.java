@@ -69,15 +69,16 @@ public class SimulationController {
         registerPreloadValues = new HashMap<>();
         memoryPreloadValues = new HashMap<>();
         
-        // Initialize with safe defaults for object creation only
-        // These are NOT used for execution - user MUST configure via GUI before running
-        cacheSize = 64 * 1024;   // Safe default for initialization (64KB)
-        blockSize = 64;           // Safe default for initialization (64 bytes)
-        cacheHitLatency = 1;      // Safe default for initialization
-        cacheMissPenalty = 10;    // Safe default for initialization
-        loadLatency = 2;          // Safe default for initialization
-        storeLatency = 2;         // Safe default for initialization
-        lsbSize = 8;              // Safe default for initialization
+        // MINIMAL DEFAULTS - Only for object creation, will be overridden by GUI
+        // These prevent division by zero during initialization
+        // User MUST configure ALL values via GUI before starting simulation
+        cacheSize = 64 * 1024;   // Minimal for init (will be overridden by GUI)
+        blockSize = 64;           // Minimal for init (will be overridden by GUI)
+        cacheHitLatency = 1;      // Minimal for init (will be overridden by GUI)
+        cacheMissPenalty = 10;    // Minimal for init (will be overridden by GUI)
+        loadLatency = 2;          // Minimal for init (will be overridden by GUI)
+        storeLatency = 2;         // Minimal for init (will be overridden by GUI)
+        lsbSize = 8;              // Minimal for init (will be overridden by GUI)
         
         // Initialize components - NO default configuration
         registerFile = new RegisterFile();
@@ -87,7 +88,7 @@ public class SimulationController {
         // Create empty station pool - user must configure via GUI
         rsPool = new ReservationStationPool(stationCounts);
         
-        // Initialize memory system with safe defaults for object creation
+        // Initialize memory system with minimal values for object creation
         // User MUST reconfigure via GUI before running simulation
         memorySystem = new MemorySystem(
             // Memory size: INTENTIONALLY FIXED at 1MB (not user-configurable)
@@ -96,13 +97,13 @@ public class SimulationController {
             // The memory size is sufficient for all test cases and simulations.
             // If needed in the future, this can be made configurable via GUI.
             1024 * 1024,      // 1MB memory - INTENTIONALLY FIXED
-            cacheSize,        // Safe default for initialization
-            blockSize,        // Safe default for initialization
-            cacheHitLatency,  // Safe default for initialization
-            cacheMissPenalty, // Safe default for initialization
-            loadLatency,      // Safe default for initialization
-            storeLatency,     // Safe default for initialization
-            lsbSize           // Safe default for initialization
+            cacheSize,        // Minimal for init (will be overridden by GUI)
+            blockSize,        // Minimal for init (will be overridden by GUI)
+            cacheHitLatency,  // Minimal for init (will be overridden by GUI)
+            cacheMissPenalty, // Minimal for init (will be overridden by GUI)
+            loadLatency,      // Minimal for init (will be overridden by GUI)
+            storeLatency,     // Minimal for init (will be overridden by GUI)
+            lsbSize           // Minimal for init (will be overridden by GUI)
         );
         executionUnit = new ExecutionUnit();
         executionUnit.setReservationStationPool(rsPool);
@@ -249,6 +250,10 @@ public class SimulationController {
         // 2. EXECUTE (decrement timers, start new executions) - SECOND  
         // 3. ISSUE (if not stalled) - THIRD
         
+        // CRITICAL: Clear stationsJustReady BEFORE write-back stage
+        // This ensures stations that become ready THIS cycle won't start executing until NEXT cycle
+        executionUnit.clearStationsJustReady();
+        
         // STAGE 1: WRITE-BACK (broadcast results from previous cycle)
         // Process broadcasts for instructions that completed execution in the PREVIOUS cycle
         // Track which stations completed execution BEFORE write-back (for completion tracking)
@@ -281,10 +286,10 @@ public class SimulationController {
                     }
                     
                     // PROGRESSIVE TIMING: Set execEnd when broadcast happens
-                    // Execution completes when the result is ready to broadcast
-                    // The broadcast itself happens in the current cycle (write-back stage)
+                    // Execution finishes in PREVIOUS cycle, broadcast happens in CURRENT cycle
+                    // Display should show: Exec = "2..11", Write = "12"
                     if (execStartCycles.containsKey(instrId) && !execEndCycles.containsKey(instrId)) {
-                        execEndCycles.put(instrId, currentCycle);
+                        execEndCycles.put(instrId, currentCycle - 1);
                     }
                     
                     // Mark complete cycle as current cycle (when broadcast happened)
@@ -789,11 +794,11 @@ public class SimulationController {
             1024 * 1024,      // 1MB memory - INTENTIONALLY FIXED
             cacheSize > 0 ? cacheSize : 64 * 1024,  // Use configured or safe default
             blockSize > 0 ? blockSize : 64,         // Use configured or safe default
-            cacheHitLatency >= 0 ? cacheHitLatency : 1,  // Use configured or safe default
-            cacheMissPenalty >= 0 ? cacheMissPenalty : 10, // Use configured or safe default
-            loadLatency > 0 ? loadLatency : 2,      // Use configured or safe default
-            storeLatency > 0 ? storeLatency : 2,    // Use configured or safe default
-            lsbSize > 0 ? lsbSize : 8               // Use configured or safe default
+            cacheHitLatency,   // User configured ONLY - NO defaults
+            cacheMissPenalty,  // User configured ONLY - NO defaults
+            loadLatency,       // User configured ONLY - NO defaults
+            storeLatency,      // User configured ONLY - NO defaults
+            lsbSize            // User configured ONLY - NO defaults
         );
         
         // Recreate issue unit
@@ -934,29 +939,20 @@ public class SimulationController {
      * Apply cache and memory configuration (recreates MemorySystem with user values)
      */
     private void applyCacheConfiguration() {
-        // Always recreate memory system - use configured values or safe defaults
-        // Safe defaults ensure no division by zero, but user should configure for execution
-        int effectiveCacheSize = cacheSize > 0 ? cacheSize : 64 * 1024;
-        int effectiveBlockSize = blockSize > 0 ? blockSize : 64;
-        int effectiveHitLatency = cacheHitLatency >= 0 ? cacheHitLatency : 1;
-        int effectiveMissPenalty = cacheMissPenalty >= 0 ? cacheMissPenalty : 10;
-        int effectiveLoadLatency = loadLatency > 0 ? loadLatency : 2;
-        int effectiveStoreLatency = storeLatency > 0 ? storeLatency : 2;
-        int effectiveLsbSize = lsbSize > 0 ? lsbSize : 8;
-        
-        // Recreate memory system with effective values
+        // NO DEFAULTS - User must configure ALL values
+        // Recreate memory system with user-configured values ONLY
         memorySystem = new MemorySystem(
             // Memory size: INTENTIONALLY FIXED at 1MB (not user-configurable)
             // This is a design decision: memory size is typically fixed in real systems
             // and doesn't affect Tomasulo algorithm simulation correctness.
             1024 * 1024,      // 1MB memory - INTENTIONALLY FIXED
-            effectiveCacheSize,
-            effectiveBlockSize,
-            effectiveHitLatency,
-            effectiveMissPenalty,
-            effectiveLoadLatency,
-            effectiveStoreLatency,
-            effectiveLsbSize
+            cacheSize,        // User configured ONLY - NO defaults
+            blockSize,        // User configured ONLY - NO defaults
+            cacheHitLatency,  // User configured ONLY - NO defaults
+            cacheMissPenalty, // User configured ONLY - NO defaults
+            loadLatency,      // User configured ONLY - NO defaults
+            storeLatency,     // User configured ONLY - NO defaults
+            lsbSize           // User configured ONLY - NO defaults
         );
         
         // CRITICAL FIX: Re-apply memory preloads after recreating MemorySystem
@@ -1022,13 +1018,13 @@ public class SimulationController {
             // This is a design decision: memory size is typically fixed in real systems
             // and doesn't affect Tomasulo algorithm simulation correctness.
             1024 * 1024,      // 1MB memory - INTENTIONALLY FIXED
-            cacheSize > 0 ? cacheSize : 64 * 1024,  // Use configured or safe default (64KB)
-            blockSize > 0 ? blockSize : 64,         // Use configured or safe default (64 bytes)
-            cacheHitLatency >= 0 ? cacheHitLatency : 1,  // Use configured or safe default
-            cacheMissPenalty >= 0 ? cacheMissPenalty : 10, // Use configured or safe default
-            loadLatency > 0 ? loadLatency : 2,      // Use configured or safe default
-            storeLatency > 0 ? storeLatency : 2,    // Use configured or safe default
-            lsbSize > 0 ? lsbSize : 8               // Use configured or safe default
+            cacheSize,         // User configured ONLY - NO defaults
+            blockSize,         // User configured ONLY - NO defaults
+            cacheHitLatency,   // User configured ONLY - NO defaults
+            cacheMissPenalty,  // User configured ONLY - NO defaults
+            loadLatency,       // User configured ONLY - NO defaults
+            storeLatency,      // User configured ONLY - NO defaults
+            lsbSize            // User configured ONLY - NO defaults
         );
         
         // Recreate issue unit with new components

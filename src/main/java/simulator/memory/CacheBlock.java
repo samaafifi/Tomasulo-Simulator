@@ -85,4 +85,9 @@ public class CacheBlock {
         data[offset] = value;
         dirty = true;
     }
+    
+    /** Get block size for GUI display */
+    public int getBlockSize() {
+        return data.length;
+    }
 }

@@ -224,4 +224,12 @@ public class CacheSimulator {
         hitCount = 0;
         missCount = 0;
     }
+    
+    // GUI display method (getNumLines already exists above)
+    public CacheBlock getCacheLine(int index) {
+        if (index >= 0 && index < numLines) {
+            return lines[index];
+        }
+        return null;
+    }
 }

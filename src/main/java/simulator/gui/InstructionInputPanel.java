@@ -17,6 +17,7 @@ public class InstructionInputPanel {
     private SimulationController controller;
     private TextArea instructionTextArea;
     private TextArea registerPreloadArea;
+    private TextArea memoryPreloadArea;
     private VBox panel;
     
     public InstructionInputPanel(SimulationController controller) {
@@ -101,6 +102,42 @@ public class InstructionInputPanel {
         registerButtonBox.getChildren().addAll(loadRegistersButton, clearRegistersButton);
         
         vbox.getChildren().addAll(registerLabel, registerPreloadArea, registerButtonBox);
+        
+        // Memory Pre-loading Section
+        Separator separator2 = new Separator();
+        separator2.setPadding(new Insets(10, 0, 10, 0));
+        vbox.getChildren().add(separator2);
+        
+        Label memoryLabel = new Label("Memory Pre-loading (Optional):");
+        memoryLabel.setStyle("-fx-font-weight: bold;");
+        
+        memoryPreloadArea = new TextArea();
+        memoryPreloadArea.setPrefRowCount(8);
+        memoryPreloadArea.setPrefColumnCount(30);
+        memoryPreloadArea.setWrapText(true);
+        memoryPreloadArea.setPromptText(
+            "Enter memory values:\n" +
+            "Format: ADDRESS=VALUE (comma-separated or one per line)\n" +
+            "Examples:\n" +
+            "1000=42, 1004=3.14, 1008=100\n" +
+            "or\n" +
+            "1000=42\n" +
+            "1004=3.14\n" +
+            "1008=100"
+        );
+        
+        HBox memoryButtonBox = new HBox(10);
+        memoryButtonBox.setPadding(new Insets(5, 0, 5, 0));
+        
+        Button loadMemoryButton = new Button("Load Memory");
+        loadMemoryButton.setOnAction(e -> loadMemory());
+        
+        Button clearMemoryButton = new Button("Clear Memory");
+        clearMemoryButton.setOnAction(e -> clearMemory());
+        
+        memoryButtonBox.getChildren().addAll(loadMemoryButton, clearMemoryButton);
+        
+        vbox.getChildren().addAll(memoryLabel, memoryPreloadArea, memoryButtonBox);
         
         this.panel = vbox;
     }
@@ -210,6 +247,83 @@ public class InstructionInputPanel {
     private void clearRegisters() {
         registerPreloadArea.clear();
         controller.clearRegisterPreloads();
+    }
+    
+    private void loadMemory() {
+        String text = memoryPreloadArea.getText().trim();
+        if (text.isEmpty()) {
+            controller.log("No memory values to load.");
+            return;
+        }
+        
+        Map<Integer, Integer> memoryValues = new HashMap<>();
+        int loaded = 0;
+        int errors = 0;
+        
+        // First, try to split by comma (comma-separated format)
+        String[] entries = text.split(",");
+        
+        // If no commas found, treat as line-separated
+        if (entries.length == 1 && !text.contains(",")) {
+            entries = text.split("\n");
+        }
+        
+        for (String entry : entries) {
+            entry = entry.trim();
+            if (entry.isEmpty() || entry.startsWith("#")) continue; // Skip empty entries and comments
+            
+            try {
+                // Parse format: ADDRESS=VALUE
+                int equalsIndex = entry.indexOf('=');
+                if (equalsIndex == -1) {
+                    errors++;
+                    continue;
+                }
+                
+                String addressStr = entry.substring(0, equalsIndex).trim();
+                String valueStr = entry.substring(equalsIndex + 1).trim();
+                
+                // Parse address (decimal or hex)
+                int address;
+                if (addressStr.startsWith("0x") || addressStr.startsWith("0X")) {
+                    address = Integer.parseInt(addressStr.substring(2), 16);
+                } else {
+                    address = Integer.parseInt(addressStr);
+                }
+                
+                // Parse value (can be integer or double)
+                int value;
+                try {
+                    // Try integer first
+                    value = Integer.parseInt(valueStr);
+                } catch (NumberFormatException e) {
+                    // If it's a double, convert to integer representation
+                    double doubleValue = Double.parseDouble(valueStr);
+                    value = (int) doubleValue;
+                }
+                
+                memoryValues.put(address, value);
+                loaded++;
+                
+            } catch (NumberFormatException e) {
+                errors++;
+                controller.log("Invalid format: " + entry + " - " + e.getMessage());
+            }
+        }
+        
+        if (loaded > 0) {
+            controller.preloadMemory(memoryValues);
+            controller.log("Loaded " + loaded + " memory values.");
+        }
+        
+        if (errors > 0) {
+            showError("Parse Errors", errors + " entries had errors and were skipped.");
+        }
+    }
+    
+    private void clearMemory() {
+        memoryPreloadArea.clear();
+        controller.clearMemoryPreloads();
     }
     
     private void showError(String title, String message) {

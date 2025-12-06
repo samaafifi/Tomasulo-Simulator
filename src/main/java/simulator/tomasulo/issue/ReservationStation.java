@@ -90,8 +90,15 @@ import simulator.tomasulo.models.Instruction;
     public void setExecutionStarted(boolean started) { this.executionStarted = started; }
     
     /**
-     * Checks if the reservation station is ready to execute
-     * Ready when both operands are available (Qj and Qk are null)
+     * TOMASULO READY CHECK
+     * An instruction can execute when BOTH Q tags are null (all operands ready)
+     * 
+     * Rule: Ready = (Qj == null) AND (Qk == null)
+     * 
+     * Special cases:
+     * - LOADS: only need Qj == null (base address ready)
+     * - STORES: need both Qj == null (address) AND Qk == null (data)
+     * - COMPUTE: need both Qj == null AND Qk == null
      */
     public boolean isReadyToExecute() {
         if (!busy) {
@@ -107,11 +114,12 @@ import simulator.tomasulo.models.Instruction;
                 return (qj == null || qj.equals("")) && (qk == null || qk.equals(""));
             } else {
                 // Loads only need base address ready
-            return qj == null || qj.equals("");
+                return qj == null || qj.equals("");
             }
         }
         
-        // For compute operations, both operands must be ready
+        // For compute operations (ADD, MUL, DIV, SUB, branches), both operands must be ready
+        // This is the classic Tomasulo ready condition!
         return (qj == null || qj.equals("")) && (qk == null || qk.equals(""));
     }
     
@@ -123,16 +131,21 @@ import simulator.tomasulo.models.Instruction;
     }
     
     /**
-     * Updates operand when a result is broadcast
+     * TOMASULO OPERAND UPDATE
+     * Called when a result is broadcast on the CDB
+     * Updates V and clears Q when producer matches
+     * 
+     * Example: If Qj == "Mult1" and Mult1 broadcasts value 6.0:
+     *   → Vj = 6.0, Qj = null (operand now ready!)
      */
     public void updateOperand(String producer, Double value) {
         if (producer.equals(qj)) {
-            vj = value;
-            qj = null;
+            vj = value;   // Capture the value
+            qj = null;    // Clear the dependency tag
         }
         if (producer.equals(qk)) {
-            vk = value;
-            qk = null;
+            vk = value;   // Capture the value
+            qk = null;    // Clear the dependency tag
         }
     }
     

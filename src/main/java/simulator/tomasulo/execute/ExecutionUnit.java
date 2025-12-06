@@ -12,6 +12,9 @@ public class ExecutionUnit {
     private ReservationStationPool rsPool; // Reference to reservation station pool
     private int currentCycle = 0;
     
+    // Track stations that just became ready this cycle (to defer execution start to next cycle)
+    private Set<String> stationsJustReady = new HashSet<>();
+    
     public ExecutionUnit() {
         // NO DEFAULT LATENCIES - user must configure via GUI
         // Latencies will be set by user input only
@@ -100,6 +103,9 @@ public class ExecutionUnit {
     public void cycle(int currentCycle) {
         this.currentCycle = currentCycle;
         
+        // Clear stations that became ready last cycle (they can now start executing)
+        stationsJustReady.clear();
+        
         // CRITICAL: Decrement timers FIRST for stations already executing
         // This ensures that if an instruction starts execution in cycle N with latency L,
         // it will complete in cycle N+L-1 (after L cycles of execution)
@@ -144,15 +150,38 @@ public class ExecutionUnit {
                 // 2. Station was issued in a STRICTLY PREVIOUS cycle (issueCycle < currentCycle)
                 // 3. NOT a memory operation (load/store execute via MemorySystem, not ExecutionUnit)
                 // 4. Station is not already in timers (avoid duplicate starts)
+                // 5. Station was NOT just made ready this cycle (defer to next cycle)
                 if (!rs.isExecutionStarted() && 
                     rs.getIssueCycle() >= 0 && 
                     rs.getIssueCycle() < currentCycle &&
-                    !timers.containsKey(rs.getName())) {
+                    !timers.containsKey(rs.getName()) &&
+                    !stationsJustReady.contains(rs.getName())) {
                     
                     String instrType = rs.getOp();
                     
                     // Skip load/store instructions - they execute via MemorySystem
                     if (isMemoryOperation(instrType)) {
+                        continue;
+                    }
+                    
+                    // Handle branch instructions - they execute immediately when operands are ready
+                    // Branches have latency 1 (they complete in the same cycle they start)
+                    if (isBranchOperation(instrType)) {
+                        int branchLatency = getLatency(instrType);
+                        if (branchLatency <= 0) {
+                            branchLatency = 1; // Default: branches complete in 1 cycle
+                        }
+                        
+                        // Get destination register from instruction (branches don't write to dest, but we need it for tracking)
+                        int destReg = 0;
+                        if (rs.getInstruction() != null) {
+                            // Branches don't have a destination register, use 0 as placeholder
+                            destReg = 0;
+                        }
+                        
+                        // Start execution: branch will complete in this cycle (latency 1)
+                        startExecution(rs.getName(), instrType, destReg, branchLatency, currentCycle);
+                        rs.startExecution(branchLatency);
                         continue;
                     }
                     
@@ -245,6 +274,18 @@ public class ExecutionUnit {
             }
             case "DADDI" -> vj + (immediate != null ? immediate : 0);
             case "DSUBI" -> vj - (immediate != null ? immediate : 0);
+            case "BEQ", "BNE" -> {
+                // Branch instructions: return 1 if taken, 0 if not taken
+                // The actual branch resolution (PC update) is handled in SimulationController
+                // after the broadcast completes
+                boolean taken = false;
+                if (instrType.equals("BEQ")) {
+                    taken = (vj == vk);
+                } else if (instrType.equals("BNE")) {
+                    taken = (vj != vk);
+                }
+                yield taken ? 1.0 : 0.0;
+            }
             default -> {
                 System.err.println("Warning: Unknown instruction type " + instrType + " in " + stationName);
                 yield vj;
@@ -258,8 +299,8 @@ public class ExecutionUnit {
             "Add1", "Add2", "Add3",      // FP Add stations 1-3
             "Mult1", "Mult2",           // FP Mult stations 4-5  
             "Div1", "Div2",             // FP Div stations 6-7
-            "Load1", "Load2",           // Load stations 8-9
-            "Store1", "Store2",         // Store stations 10-11
+            "L1", "L2",                 // Load stations 8-9 (changed from "Load1", "Load2")
+            "S1", "S2",                 // Store stations 10-11 (changed from "Store1", "Store2")
             "IntAdd1", "IntAdd2",       // Integer stations 12-13
             "Branch1"                   // Branch station 14
         };
@@ -275,8 +316,9 @@ public class ExecutionUnit {
         Map<String, Integer> nameToId = new HashMap<>();
         String[] stationNames = {
             "Add1", "Add2", "Add3", "Mult1", "Mult2", 
-            "Div1", "Div2", "Load1", "Load2", 
-            "Store1", "Store2", "IntAdd1", "IntAdd2", "Branch1"
+            "Div1", "Div2", "L1", "L2",      // Changed from "Load1", "Load2"
+            "S1", "S2",                      // Changed from "Store1", "Store2"
+            "IntAdd1", "IntAdd2", "Branch1"
         };
         
         for (int i = 0; i < stationNames.length; i++) {
@@ -295,12 +337,21 @@ public class ExecutionUnit {
         instrTypes.clear();
         destRegs.clear();
         currentCycle = 0;
+        stationsJustReady.clear();
         // NOTE: Do NOT clear latencies - they are user-configured and should persist
         // latencies.clear(); // <-- DO NOT UNCOMMENT - latencies must persist across resets
     }
     
     public int getCurrentCycle() {
         return currentCycle;
+    }
+    
+    /**
+     * Mark a station as just became ready this cycle
+     * (will defer execution start to next cycle)
+     */
+    public void markStationJustReady(String stationName) {
+        stationsJustReady.add(stationName);
     }
     
     /**
@@ -314,5 +365,14 @@ public class ExecutionUnit {
                upperOp.equals("L.S") || upperOp.equals("L.D") ||
                upperOp.equals("SW") || upperOp.equals("SD") || 
                upperOp.equals("S.S") || upperOp.equals("S.D");
+    }
+    
+    /**
+     * Check if instruction is a branch operation
+     */
+    private boolean isBranchOperation(String op) {
+        if (op == null) return false;
+        String upperOp = op.toUpperCase();
+        return upperOp.equals("BEQ") || upperOp.equals("BNE");
     }
 }

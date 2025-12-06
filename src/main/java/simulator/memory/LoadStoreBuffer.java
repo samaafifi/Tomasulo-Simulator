@@ -18,6 +18,7 @@ public class LoadStoreBuffer {
         public boolean busy;         // true = still executing
         public boolean isLoad;       // true for loads, false for stores
         public String destReg;       // destination register (for loads)
+        public String stationName;   // Load/Store station name (L1, L2, S1, S2)
     }
 
     // ------------- INTERNAL STATE --------------- //
@@ -41,8 +42,8 @@ public class LoadStoreBuffer {
 
     // ------------- ADD NEW OPERATIONS ------------- //
 
-    /** Add a new LOAD instruction (ENHANCED with destReg) */
-    public Entry addLoad(String op, int address, int latency, String destReg) {
+    /** Add a new LOAD instruction (ENHANCED with destReg and stationName) */
+    public Entry addLoad(String op, int address, int latency, String destReg, String stationName) {
          if (isFull()) {
             throw new IllegalStateException("Load/Store Buffer is full!");
         }
@@ -54,6 +55,7 @@ public class LoadStoreBuffer {
         e.busy = true;
         e.isLoad = true;
         e.destReg = destReg;
+        e.stationName = stationName;  // Track which load station issued this
         buffer.add(e);
         return e;
     }

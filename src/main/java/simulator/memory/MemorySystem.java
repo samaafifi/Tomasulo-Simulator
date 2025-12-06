@@ -26,13 +26,14 @@ public class MemorySystem {
     public static class CompletedOp {
         public int entryId;
         public String op;
-        public String destReg;  // for loads
-        public long value;      // loaded value
+        public String destReg;     // for loads
+        public long value;         // loaded value
         public boolean isLoad;
+        public String stationName; // Load/Store station name (L1, L2, S1, S2)
 
         @Override
         public String toString() {
-            return String.format("%s -> %s = %d", op, destReg, value);
+            return String.format("%s -> %s = %d (from %s)", op, destReg, value, stationName);
         }
     }
 
@@ -80,9 +81,10 @@ public class MemorySystem {
      * @param baseValue Base register value
      * @param offset Immediate offset
      * @param destReg Destination register name
+     * @param stationName Load station name (L1, L2, etc.)
      * @return LSB entry ID
      */
-    public int issueLoad(String op, int baseValue, int offset, String destReg) {
+    public int issueLoad(String op, int baseValue, int offset, String destReg, String stationName) {
         int effectiveAddress = baseValue + offset;
         
         // Determine total latency based on cache hit/miss
@@ -90,7 +92,7 @@ public class MemorySystem {
             ? loadLatency + cache.getHitLatency()
             : loadLatency + cache.getMissPenalty();
         
-        LoadStoreBuffer.Entry entry = lsb.addLoad(op, effectiveAddress, totalCycles, destReg);
+        LoadStoreBuffer.Entry entry = lsb.addLoad(op, effectiveAddress, totalCycles, destReg, stationName);
         return entry.id;
     }
 
@@ -145,6 +147,7 @@ public class MemorySystem {
                 op.destReg = e.destReg;
                 op.value = loadedValue;
                 op.isLoad = true;
+                op.stationName = e.stationName;  // Pass through station name
                 results.add(op);
             }
             // Stores don't broadcast on CDB

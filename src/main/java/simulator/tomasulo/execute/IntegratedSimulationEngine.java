@@ -43,6 +43,10 @@ public class IntegratedSimulationEngine {
             executionUnit = new ExecutionUnit();
             writeBackUnit = new WriteBackUnit(broadcastManager);
             
+            // Connect components - BroadcastManager needs ExecutionUnit to mark stations as just ready
+            broadcastManager.setExecutionUnit(executionUnit);
+            executionUnit.setReservationStationPool(rsPool);
+            
             System.out.println("✓ All components initialized successfully");
             
         } catch (Exception e) {

@@ -33,47 +33,49 @@ public class CDBArbitration {
             return selected;
         }
         
-        // Priority-based arbitration - uses getInstrType()
-        readyRequests.sort((a, b) -> {
-            return getPriority(b.getInstrType()) - getPriority(a.getInstrType());
-        });
+        // CRITICAL FIX: First-Come-First-Serve (FCFS) arbitration
+        // Select the first request that was added (maintain insertion order)
+        // Only ONE instruction can broadcast per cycle
+        if (readyRequests.size() > 1) {
+            // Log CDB conflict when multiple instructions want to broadcast
+            System.out.println(String.format(
+                "[CDB ARBITRATION] Cycle %d: CDB Conflict - %d instructions want to broadcast (using FCFS)",
+                currentCycle, readyRequests.size()
+            ));
+            for (int i = 0; i < readyRequests.size(); i++) {
+                BroadcastRequest req = readyRequests.get(i);
+                System.out.println(String.format(
+                    "  [%d] RS%d -> R%d = %.2f (%s) - readyCycle=%d",
+                    i, req.getRsId(), req.getDestReg(), req.getResult(), 
+                    req.getInstrType(), req.getReadyCycle()
+                ));
+            }
+        }
         
-        // Select first (highest priority)
+        // Select first request (FCFS - first come, first serve)
+        // The first request in the list is the one that was added first
+        selected.add(readyRequests.remove(0));
+        
+        // Put remaining ready requests back for next cycle
         if (!readyRequests.isEmpty()) {
-            selected.add(readyRequests.remove(0));
-            // Put remaining ready requests back for next cycle
             pendingRequests.addAll(readyRequests);
+            System.out.println(String.format(
+                "[CDB ARBITRATION] Cycle %d: %d instruction(s) deferred to next cycle",
+                currentCycle, readyRequests.size()
+            ));
         }
         
         return selected;
     }
     
-    private int getPriority(String instructionType) {
-        if (instructionType == null) return 0;
-        
-        if (instructionType.contains("DADD") || instructionType.contains("DSUB") || 
-            "BEQ".equals(instructionType) || "BNE".equals(instructionType)) {
-            return 4;
-        }
-        if (instructionType.contains("ADD") || instructionType.contains("SUB")) {
-            return 3;
-        }
-        if (instructionType.contains("MUL") || instructionType.contains("DIV")) {
-            return 2;
-        }
-        if (instructionType.contains("L.") || instructionType.contains("S.") || 
-            "LW".equals(instructionType) || "SW".equals(instructionType) ||
-            "LD".equals(instructionType) || "SD".equals(instructionType)) {
-            return 1;
-        }
-        return 0;
-    }
+    // REMOVED: getPriority() method - no longer needed with FCFS arbitration
+    // Previous priority-based arbitration has been replaced with First-Come-First-Serve
     
     public void clear() {
         pendingRequests.clear();
     }
     
     public String getArbitrationStrategy() {
-        return "Priority: Integer(4) > FP Add/Sub(3) > FP Mul/Div(2) > Load/Store(1)";
+        return "First-Come-First-Serve (FCFS): The first instruction to complete execution broadcasts first. If multiple instructions complete in the same cycle, the first one added to the queue broadcasts, others wait for the next cycle.";
     }
 }

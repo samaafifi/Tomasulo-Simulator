@@ -598,21 +598,22 @@ public class VisualizationPanel {
             row.setBusy(rs.isBusy() ? "1" : "0");
             row.setOperation(rs.getOp() != null ? rs.getOp() : "");
             
-            // Format Vj and Vk - show register names or values
-            if (rs.getQj() != null && !rs.getQj().isEmpty()) {
-                row.setVj(rs.getQj()); // Show waiting station
-            } else if (rs.getVj() != null) {
-                // Try to format as register reference if it's a register value
+            // V/Q CONTRACT: Vj and Qj are MUTUALLY EXCLUSIVE
+            // Vj column: Show VALUE only (empty if waiting on Qj)
+            // Qj column: Show TAG only (empty if value ready in Vj)
+            if (rs.getVj() != null) {
+                // Value is ready - show it in Vj
                 row.setVj(formatRSValue(rs.getVj()));
             } else {
+                // No value yet (waiting on Qj) - Vj column is EMPTY
                 row.setVj("");
             }
             
-            if (rs.getQk() != null && !rs.getQk().isEmpty()) {
-                row.setVk(rs.getQk()); // Show waiting station
-            } else if (rs.getVk() != null) {
+            if (rs.getVk() != null) {
+                // Value is ready - show it in Vk
                 row.setVk(formatRSValue(rs.getVk()));
             } else {
+                // No value yet (waiting on Qk) - Vk column is EMPTY
                 row.setVk("");
             }
             

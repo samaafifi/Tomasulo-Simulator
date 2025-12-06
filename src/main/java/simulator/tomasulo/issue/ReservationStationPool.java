@@ -63,29 +63,29 @@ import java.util.*;
          }
      }
      
-     /**
-      * Generates a name for a reservation station
-      */
-     private String getStationName(String type, int index) {
-         switch (type) {
-             case "FP_ADD":
-                 return "Add" + index;
-             case "FP_MUL":
-                 return "Mult" + index;
-             case "FP_DIV":
-                 return "Div" + index;
-             case "LOAD":
-                 return "Load" + index;
-             case "STORE":
-                 return "Store" + index;
-             case "INTEGER_ADD":
-                 return "IntAdd" + index;
-             case "BRANCH":
-                 return "Branch" + index;
-             default:
-                 return type + index;
-         }
-     }
+    /**
+     * Generates a name for a reservation station
+     */
+    private String getStationName(String type, int index) {
+        switch (type) {
+            case "FP_ADD":
+                return "Add" + index;
+            case "FP_MUL":
+                return "Mult" + index;
+            case "FP_DIV":
+                return "Div" + index;
+            case "LOAD":
+                return "L" + index;  // Changed from "Load" + index to "L" + index
+            case "STORE":
+                return "S" + index;  // Changed from "Store" + index to "S" + index
+            case "INTEGER_ADD":
+                return "IntAdd" + index;
+            case "BRANCH":
+                return "Branch" + index;
+            default:
+                return type + index;
+        }
+    }
      
      /**
       * Checks if there's an available station of the given type

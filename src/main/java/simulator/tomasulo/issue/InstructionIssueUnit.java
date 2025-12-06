@@ -127,9 +127,10 @@ public class InstructionIssueUnit {
                     if (baseValueObj != null && offset != null) {
                         int baseValue = baseValueObj.intValue();
                         String destReg = instruction.getDestRegister();
-                        memorySystem.issueLoad(op, baseValue, offset, destReg);
+                        String stationName = rs.getName();  // Pass station name (L1, L2, etc.)
+                        memorySystem.issueLoad(op, baseValue, offset, destReg, stationName);
                         System.out.println("  → Issued to MemorySystem: " + op + " " + destReg + 
-                                         " from address " + (baseValue + offset));
+                                         " from address " + (baseValue + offset) + " (station: " + stationName + ")");
                     } else {
                         System.out.println("  → Load waiting for base register (will issue when ready)");
                     }
@@ -291,12 +292,19 @@ public class InstructionIssueUnit {
         return branchPending;
     }
     
+    /**
+     * TOMASULO ALGORITHM - ISSUE STAGE
+     * Sets up operands following V/Q contract:
+     * - If register.Qi != null → set Qj/Qk = producer tag, Vj/Vk = null (WAITING)
+     * - If register.Qi == null → set Qj/Qk = null, Vj/Vk = value (READY)
+     * This implements register renaming and dynamic scheduling!
+     */
     private void issueToReservationStation(Instruction instruction, ReservationStation rs) {
         rs.setBusy(true);
         rs.setOp(instruction.getOperation());
         rs.setInstruction(instruction);
         
-        // CRITICAL FIX: For memory operations, handle base register and source registers correctly
+        // For memory operations, handle base register and source registers correctly
         // For stores: base register -> Vj/Qj (address), source register (data) -> Vk/Qk
         // For loads: base register -> Vj/Qj (address), no source register needed
         if (instruction.isMemoryOperation()) {
@@ -305,12 +313,14 @@ public class InstructionIssueUnit {
                 String producer = registerFile.getRegisterStatus(baseReg);
                 if (producer != null && !producer.equals("")) {
                     // Base register is busy, waiting for producer
-                    rs.setQj(producer);
-                    rs.setVj(null);
+                    // V/Q Contract: Qj != null → Vj = null (WAITING)
+                    rs.setQj(producer);  // Tag of producer station
+                    rs.setVj(null);      // No value yet
                 } else if (registerFile.isRegisterReady(baseReg)) {
                     // Base register is ready, can read value
-                    rs.setVj(registerFile.getRegisterValue(baseReg));
-                    rs.setQj(null);
+                    // V/Q Contract: Qj == null → Vj = value (READY)
+                    rs.setVj(registerFile.getRegisterValue(baseReg));  // Copy value
+                    rs.setQj(null);                                    // No dependency
                 } else {
                     // Base register is busy but no producer tag (shouldn't happen, but handle gracefully)
                     rs.setQj(null);

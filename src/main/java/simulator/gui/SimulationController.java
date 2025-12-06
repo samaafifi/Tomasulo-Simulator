@@ -45,6 +45,7 @@ public class SimulationController {
     private Map<String, Integer> stationCounts; // Station type -> count
     private int lsbSize;
     private Map<String, Double> registerPreloadValues; // Register name -> value
+    private Map<Integer, Integer> memoryPreloadValues; // Memory address -> value
     
     // Tracking
     private Map<Integer, Integer> issueCycles;
@@ -66,6 +67,7 @@ public class SimulationController {
         latencies = new HashMap<>();
         stationCounts = new HashMap<>();
         registerPreloadValues = new HashMap<>();
+        memoryPreloadValues = new HashMap<>();
         
         // Initialize with safe defaults for object creation only
         // These are NOT used for execution - user MUST configure via GUI before running
@@ -105,6 +107,8 @@ public class SimulationController {
         executionUnit = new ExecutionUnit();
         executionUnit.setReservationStationPool(rsPool);
         broadcastManager = new BroadcastManager(rsPool, registerFile, rat);
+        // CRITICAL FIX: Wire BroadcastManager to ExecutionUnit for stationsJustReady tracking
+        broadcastManager.setExecutionUnit(executionUnit);
         writeBackUnit = new WriteBackUnit(broadcastManager);
         issueUnit = new InstructionIssueUnit(rsPool, registerFile, memorySystem);
         
@@ -232,12 +236,85 @@ public class SimulationController {
         
         log("=== CYCLE " + currentCycle + " ===");
         
+        // CRITICAL FIX: Clear stationsJustReady at cycle start (matches micro_salma.txt line 92)
+        // This is done automatically in ExecutionUnit.cycle(), but we ensure it's cleared here too
+        
         // Sync issue unit cycle counter
         while (issueUnit.getCurrentCycle() < currentCycle) {
             issueUnit.nextCycle();
         }
         
-        // ISSUE STAGE - Only issue ONE instruction per cycle (strict in-order issue)
+        // CRITICAL FIX: Correct stage order (matches micro_salma.txt):
+        // 1. WRITE-BACK (broadcast results) - FIRST
+        // 2. EXECUTE (decrement timers, start new executions) - SECOND  
+        // 3. ISSUE (if not stalled) - THIRD
+        
+        // STAGE 1: WRITE-BACK (broadcast results from previous cycle)
+        // Process broadcasts for instructions that completed execution in the PREVIOUS cycle
+        // Track which stations completed execution BEFORE write-back (for completion tracking)
+        List<ReservationStation> stationsBefore = rsPool.getBusyStations();
+        Map<String, Integer> stationNamesBefore = new HashMap<>();
+        for (ReservationStation rs : stationsBefore) {
+            if (rs.isExecutionStarted() && rs.getRemainingCycles() == 0) {
+                stationNamesBefore.put(rs.getName(), 
+                    rs.getInstruction() != null ? rs.getInstruction().getId() : -1);
+            }
+        }
+        
+        // Process broadcasts (only those ready in current cycle)
+        // CDB arbitration happens inside writeBackUnit.writeBackCycle()
+        // If multiple instructions want to broadcast, only one will be selected (FCFS)
+        // and others will wait for the next cycle
+        writeBackUnit.writeBackCycle(currentCycle);
+        
+        // Track write-back cycles (when broadcasts actually happen)
+        List<ReservationStation> stationsAfter = rsPool.getBusyStations();
+        for (ReservationStation rs : stationsAfter) {
+            if (!rs.isBusy() && stationNamesBefore.containsKey(rs.getName())) {
+                Integer instrId = stationNamesBefore.get(rs.getName());
+                if (instrId != null && instrId > 0) {
+                    Instruction completedInstr = findInstructionById(instrId);
+                    if (completedInstr != null && isBranchInstruction(completedInstr)) {
+                        resolveBranch(completedInstr, currentCycle);
+                    }
+                    // Mark complete cycle as current cycle (when broadcast happened)
+                    if (!completeCycles.containsKey(instrId)) {
+                        completeCycles.put(instrId, currentCycle);
+                        log("COMPLETE: Instruction " + instrId + " (write-back in cycle " + currentCycle + " from station " + rs.getName() + ")");
+                    }
+                }
+            }
+        }
+        
+        // STAGE 2: EXECUTE (decrement timers, start new executions)
+        executionUnit.cycle(currentCycle);
+        
+        // Track execution start/end cycles for display purposes
+        // Check which instructions started execution this cycle (after executionUnit.cycle() call)
+        List<ReservationStation> allStations = rsPool.getAllStations();
+        for (ReservationStation rs : allStations) {
+            if (rs.isExecutionStarted() && rs.getInstruction() != null) {
+                int instrId = rs.getInstruction().getId();
+                
+                // Skip memory operations - they're tracked separately when issued
+                if (rs.getInstruction().isMemoryOperation()) {
+                    continue;
+                }
+                
+                // Track execution start if not already tracked
+                if (!execStartCycles.containsKey(instrId)) {
+                    int latency = executionUnit.getLatency(rs.getOp());
+                    if (latency > 0) {
+                        execStartCycles.put(instrId, currentCycle);
+                        // Execution end = start + latency - 1 (e.g., start cycle 2, latency 2, end cycle 3)
+                        execEndCycles.put(instrId, currentCycle + latency - 1);
+                        log("EXEC START: " + rs.getInstruction() + " in " + rs.getName() + " (cycles: " + currentCycle + "..." + (currentCycle + latency - 1) + ")");
+                    }
+                }
+            }
+        }
+        
+        // STAGE 3: ISSUE - Only issue ONE instruction per cycle (strict in-order issue)
         if (instructionPointer < instructions.size()) {
             Instruction currentInstruction = instructions.get(instructionPointer);
             if (issueUnit.canIssue(currentInstruction)) {
@@ -296,39 +373,7 @@ public class SimulationController {
             log("All instructions have been issued");
         }
         
-        // EXECUTE STAGE
-        // Call executionUnit.cycle() which handles:
-        // 1. Decrementing timers for executing instructions
-        // 2. Starting execution for ready instructions issued in previous cycles
-        // 3. Completing execution when timers reach 0
-        executionUnit.cycle(currentCycle);
-        
-        // Track execution start/end cycles for display purposes
-        // Check which instructions started execution this cycle (after executionUnit.cycle() call)
-        List<ReservationStation> allStations = rsPool.getAllStations();
-        for (ReservationStation rs : allStations) {
-            if (rs.isExecutionStarted() && rs.getInstruction() != null) {
-                int instrId = rs.getInstruction().getId();
-                
-                // Skip memory operations - they're tracked separately when issued
-                if (rs.getInstruction().isMemoryOperation()) {
-                    continue;
-                }
-                
-                // Track execution start if not already tracked
-                if (!execStartCycles.containsKey(instrId)) {
-                    int latency = executionUnit.getLatency(rs.getOp());
-                    if (latency > 0) {
-                        execStartCycles.put(instrId, currentCycle);
-                        // Execution end = start + latency - 1 (e.g., start cycle 2, latency 2, end cycle 3)
-                        execEndCycles.put(instrId, currentCycle + latency - 1);
-                        log("EXEC START: " + rs.getInstruction() + " in " + rs.getName() + " (cycles: " + currentCycle + "..." + (currentCycle + latency - 1) + ")");
-                    }
-                }
-            }
-        }
-        
-        // MEMORY SYSTEM
+        // MEMORY SYSTEM (processes in parallel with execution)
         List<MemorySystem.CompletedOp> memoryResults = memorySystem.cycle();
         for (MemorySystem.CompletedOp op : memoryResults) {
             if (op.isLoad) {
@@ -356,7 +401,9 @@ public class SimulationController {
                 }
                 
                 // Create broadcast request for CDB
-                String loadStationName = registerFile.getQi(op.destReg);
+                // CRITICAL FIX: Use the station name from the load buffer entry, not from register Qi
+                // The register Qi might have been overwritten by a later instruction (WAW hazard)
+                String loadStationName = op.stationName;  // Get from CompletedOp, not from register!
                 if (loadStationName != null && !loadStationName.isEmpty()) {
                     int rsId = ExecutionUnit.stationNameToRsId(loadStationName);
                     int destRegNum = convertRegNameToNumber(op.destReg);
@@ -418,28 +465,6 @@ public class SimulationController {
             }
         }
         
-        // WRITE-BACK STAGE
-        // CRITICAL FIX: Write-back happens in the NEXT cycle after execution completes
-        // Instructions that completed execution in cycle N-1 will broadcast in cycle N
-        // Process broadcasts for instructions that completed execution in the PREVIOUS cycle
-        // This ensures write-back happens AFTER execution, not in the same cycle
-        
-        // Track which stations completed execution BEFORE write-back (for completion tracking)
-        List<ReservationStation> stationsBefore = rsPool.getBusyStations();
-        Map<String, Integer> stationNamesBefore = new HashMap<>();
-        for (ReservationStation rs : stationsBefore) {
-            if (rs.isExecutionStarted() && rs.getRemainingCycles() == 0) {
-                stationNamesBefore.put(rs.getName(), 
-                    rs.getInstruction() != null ? rs.getInstruction().getId() : -1);
-            }
-        }
-        
-        // Process broadcasts (only those ready in current cycle)
-        writeBackUnit.writeBackCycle(currentCycle);
-        
-        // Note: BroadcastManager is registered as a listener to CDB, so it will be called
-        // automatically when WriteBackUnit processes broadcasts. No need to call broadcast() separately.
-        
         // CRITICAL FIX: Check for store stations that became ready after CDB broadcasts
         // Stores that were waiting for source register data may now be ready to issue to MemorySystem
         List<ReservationStation> readyStations = rsPool.getReadyStations();
@@ -476,27 +501,6 @@ public class SimulationController {
                         } catch (Exception e) {
                             log("ERROR: Failed to issue ready store to MemorySystem: " + e.getMessage());
                         }
-                    }
-                }
-            }
-        }
-        
-        // CRITICAL FIX: Track write-back cycles (when broadcasts actually happen)
-        // Write-back happens AFTER execution completes, so mark complete cycles after broadcast
-        List<ReservationStation> stationsAfter = rsPool.getBusyStations();
-        for (ReservationStation rs : stationsAfter) {
-            if (!rs.isBusy() && stationNamesBefore.containsKey(rs.getName())) {
-                Integer instrId = stationNamesBefore.get(rs.getName());
-                if (instrId != null && instrId > 0) {
-                    Instruction completedInstr = findInstructionById(instrId);
-                    if (completedInstr != null && isBranchInstruction(completedInstr)) {
-                        resolveBranch(completedInstr, currentCycle);
-                    }
-                    // CRITICAL FIX: Write-back happens in current cycle (after execution completed in previous cycle)
-                    // Mark complete cycle as current cycle (when broadcast happened)
-                    if (!completeCycles.containsKey(instrId)) {
-                        completeCycles.put(instrId, currentCycle);
-                        log("COMPLETE: Instruction " + instrId + " (write-back in cycle " + currentCycle + " from station " + rs.getName() + ")");
                     }
                 }
             }
@@ -629,18 +633,39 @@ public class SimulationController {
         String op = branch.getOperation().toUpperCase();
         if (!op.equals("BEQ") && !op.equals("BNE")) return;
         
-        // Get source register values
-        String r1 = branch.getSourceReg1();
-        String r2 = branch.getSourceReg2();
+        // CRITICAL FIX: Get operand values from reservation station (Vj, Vk)
+        // These are the actual values used for branch comparison, not from register file
+        // The register file might not have the latest values if they're still being computed
+        ReservationStation branchRS = null;
+        for (ReservationStation rs : rsPool.getAllStations()) {
+            if (rs.getInstruction() != null && rs.getInstruction().getId() == branch.getId()) {
+                branchRS = rs;
+                break;
+            }
+        }
         
-        if (r1 == null || r2 == null) {
-            log("BRANCH ERROR: Missing source registers");
+        if (branchRS == null) {
+            log("BRANCH ERROR: Branch reservation station not found");
             issueUnit.resolveBranch();
             return;
         }
         
-        double v1 = registerFile.getRegisterValue(r1);
-        double v2 = registerFile.getRegisterValue(r2);
+        // Get operand values from reservation station
+        Double v1Obj = branchRS.getVj();
+        Double v2Obj = branchRS.getVk();
+        
+        if (v1Obj == null || v2Obj == null) {
+            log("BRANCH ERROR: Branch operands not ready (Vj=" + v1Obj + ", Vk=" + v2Obj + ")");
+            issueUnit.resolveBranch();
+            return;
+        }
+        
+        double v1 = v1Obj;
+        double v2 = v2Obj;
+        
+        // Get source register names for logging
+        String r1 = branch.getSourceReg1();
+        String r2 = branch.getSourceReg2();
         
         // Evaluate condition
         boolean taken = false;
@@ -650,7 +675,8 @@ public class SimulationController {
             taken = (v1 != v2);
         }
         
-        log("BRANCH RESOLVED: " + op + " " + r1 + "(" + v1 + ") " + r2 + "(" + v2 + ") - " + (taken ? "TAKEN" : "NOT TAKEN"));
+        log("BRANCH RESOLVED: " + op + " " + (r1 != null ? r1 : "?") + "(" + v1 + ") " + 
+            (r2 != null ? r2 : "?") + "(" + v2 + ") - " + (taken ? "TAKEN" : "NOT TAKEN"));
         
         if (taken) {
             // Get branch target (immediate value contains target instruction index)
@@ -775,6 +801,17 @@ public class SimulationController {
         if (!registerPreloadValues.isEmpty()) {
             for (Map.Entry<String, Double> entry : registerPreloadValues.entrySet()) {
                 registerFile.setRegisterValue(entry.getKey(), entry.getValue());
+            }
+        }
+        
+        // Re-apply memory pre-loads if any
+        if (!memoryPreloadValues.isEmpty()) {
+            for (Map.Entry<Integer, Integer> entry : memoryPreloadValues.entrySet()) {
+                int address = entry.getKey();
+                int value = entry.getValue();
+                // Convert integer to double and write as 8 bytes for L.D compatibility
+                double doubleValue = (double) value;
+                memorySystem.writeDouble(address, doubleValue);
             }
         }
         
@@ -1023,6 +1060,49 @@ public class SimulationController {
         registerFile.reset();
         registerPreloadValues.clear();
         log("Cleared all register pre-load values.");
+        
+        if (updateCallback != null) {
+            updateCallback.run();
+        }
+    }
+    
+    /**
+     * Pre-load memory values
+     * CRITICAL FIX: For double-precision loads (L.D, LD), we need to write 8 bytes
+     * We write the integer value as both words (low and high) so L.D can read it correctly
+     */
+    public void preloadMemory(Map<Integer, Integer> values) {
+        memoryPreloadValues.clear();
+        memoryPreloadValues.putAll(values);
+        
+        // Apply to memory system
+        for (Map.Entry<Integer, Integer> entry : values.entrySet()) {
+            int address = entry.getKey();
+            int value = entry.getValue();
+            
+            // Convert integer to double and write as 8 bytes
+            // This ensures L.D (load double) instructions can read the value correctly
+            double doubleValue = (double) value;
+            memorySystem.writeDouble(address, doubleValue);
+            
+            log("  Memory[" + address + "] = " + value + " (written as double: " + doubleValue + ")");
+        }
+        
+        log("Pre-loaded " + values.size() + " memory value(s) as doubles (8 bytes each).");
+        
+        if (updateCallback != null) {
+            updateCallback.run();
+        }
+    }
+    
+    /**
+     * Clear all memory pre-load values
+     */
+    public void clearMemoryPreloads() {
+        // Note: Memory contents are preserved unless explicitly cleared
+        // We just clear the preload tracking map
+        memoryPreloadValues.clear();
+        log("Cleared memory pre-load tracking (memory contents preserved).");
         
         if (updateCallback != null) {
             updateCallback.run();

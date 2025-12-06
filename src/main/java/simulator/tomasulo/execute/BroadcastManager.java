@@ -10,6 +10,7 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
     private ReservationStationPool rsPool;
     private RegisterFile registerFile;
     private RegisterAliasTable rat;
+    private ExecutionUnit executionUnit;
     
     public BroadcastManager() {
         // Default constructor - components will be set later if needed
@@ -22,6 +23,13 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
         this.registerFile = registerFile;
         this.rat = rat;
         CommonDataBus.getInstance().registerListener(this);
+    }
+    
+    /**
+     * Set execution unit reference (needed to mark stations as just ready)
+     */
+    public void setExecutionUnit(ExecutionUnit executionUnit) {
+        this.executionUnit = executionUnit;
     }
     
     /**
@@ -50,23 +58,28 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
             String destRegName = convertToRegName(destRegister);
             
             // 1. Update Register File
-            // CRITICAL FIX: Check if register's Qi still points to this station (WAW hazard handling)
-            // If a later instruction has already updated the Qi, this write should be ignored
-            // Only update if Qi matches this station (or if Qi is null, meaning no pending write)
+            // TOMASULO WAW HAZARD PROTECTION:
+            // Check if register's Qi still points to this station
+            // Example: ADD.D F2, ... (Add1) then SUB.D F2, ... (Add2)
+            // When Add1 broadcasts: F2.Qi = "Add2" (NOT "Add1")
+            // → Don't update F2 register (newer instruction owns it)
+            // → DO update waiting stations (they need Add1's old F2)
             if (destRegName != null && registerFile != null) {
                 String currentQi = registerFile.getQi(destRegName);
                 if (stationName.equals(currentQi)) {
                     // Qi still points to this station - safe to update
-                registerFile.writeValue(destRegName, result);
-                System.out.println("  ✓ Updated " + destRegName + " = " + result);
+                    registerFile.writeValue(destRegName, result);
+                    System.out.println("  ✓ Updated " + destRegName + " = " + result);
                 } else if (currentQi == null || currentQi.isEmpty()) {
                     // No pending write - safe to update (shouldn't happen in normal flow, but handle gracefully)
                     registerFile.writeValue(destRegName, result);
                     System.out.println("  ✓ Updated " + destRegName + " = " + result + " (no pending write)");
                 } else {
-                    // Qi points to a different station - this is a WAW scenario
-                    // A later instruction has already claimed this register - ignore this write
-                    System.out.println("  ⚠ Skipped update of " + destRegName + " - WAW: Qi now points to " + currentQi + " (not " + stationName + ")");
+                    // WAW HAZARD DETECTED!
+                    // Qi points to a different station - newer instruction has claimed this register
+                    // Don't update register, but DO update waiting stations (they need this old value)
+                    System.out.println("  ⚠ WAW Protection: Skipped " + destRegName + " register update");
+                    System.out.println("    Current Qi: " + currentQi + ", Broadcasting: " + stationName);
                 }
             }
             
@@ -111,6 +124,17 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
         }
     }
     
+    /**
+     * TOMASULO ASSOCIATIVE BROADCAST
+     * Updates ALL waiting reservation stations simultaneously
+     * This is the magic of Tomasulo - everyone listening gets the value at once!
+     * 
+     * For each busy station:
+     * - If Qj == producerName → Vj = result, Qj = null (operand 1 ready!)
+     * - If Qk == producerName → Vk = result, Qk = null (operand 2 ready!)
+     * 
+     * When both Qj and Qk become null, station is ready to execute!
+     */
     private void updateWaitingStations(String producerName, double result) {
         try {
             if (rsPool == null || producerName == null) return;
@@ -121,16 +145,31 @@ public class BroadcastManager implements CommonDataBus.BroadcastListener {
                 if (rs.isBusy()) {
                     String qj = rs.getQj();
                     String qk = rs.getQk();
+                    boolean operandUpdated = false;
                     
+                    // Check first operand (Vj/Qj)
                     if (producerName.equals(qj)) {
-                        rs.setVj(result);
-                        rs.setQj(null);
-                        System.out.println("  ✓ Updated " + rs.getName() + ".Vj");
+                        rs.setVj(result);  // Copy value
+                        rs.setQj(null);    // Clear dependency tag
+                        System.out.println("  ✓ Updated " + rs.getName() + ".Vj = " + result + " (was waiting on " + producerName + ")");
+                        operandUpdated = true;
                     }
+                    
+                    // Check second operand (Vk/Qk)
                     if (producerName.equals(qk)) {
-                        rs.setVk(result);
-                        rs.setQk(null);
-                        System.out.println("  ✓ Updated " + rs.getName() + ".Vk");
+                        rs.setVk(result);  // Copy value
+                        rs.setQk(null);    // Clear dependency tag
+                        System.out.println("  ✓ Updated " + rs.getName() + ".Vk = " + result + " (was waiting on " + producerName + ")");
+                        operandUpdated = true;
+                    }
+                    
+                    // If operands just became ready, mark station to defer execution start
+                    // Execution starts in NEXT cycle, not same cycle as broadcast
+                    boolean isStationReady = (rs.getQj() == null || rs.getQj().isEmpty()) && 
+                                            (rs.getQk() == null || rs.getQk().isEmpty());
+                    if (operandUpdated && isStationReady && executionUnit != null) {
+                        executionUnit.markStationJustReady(rs.getName());
+                        System.out.println("  ⏸ " + rs.getName() + " now ready (both operands available) - execution starts next cycle");
                     }
                 }
             }

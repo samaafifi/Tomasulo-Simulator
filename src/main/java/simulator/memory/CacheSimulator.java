@@ -71,12 +71,12 @@ public class CacheSimulator {
 
     /** 
      * Read an 8-byte DOUBLEWORD from cache (LD, L.D).
-     * Reads two consecutive 4-byte words.
+     * Reads two consecutive 4-byte words (little-endian order).
      */
     public long readDoubleWord(int address) {
-        int word1 = readWord(address);      // High word
-        int word2 = readWord(address + 4);  // Low word
-        return ((long)word1 << 32) | (word2 & 0xFFFFFFFFL);
+        int low = readWord(address);        // Low word at address
+        int high = readWord(address + 4);   // High word at address+4
+        return ((long)high << 32) | (low & 0xFFFFFFFFL);
     }
 
     /** 

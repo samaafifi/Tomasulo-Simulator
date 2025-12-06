@@ -268,8 +268,10 @@ public class SimulationController {
         writeBackUnit.writeBackCycle(currentCycle);
         
         // Track write-back cycles (when broadcasts actually happen)
-        List<ReservationStation> stationsAfter = rsPool.getBusyStations();
-        for (ReservationStation rs : stationsAfter) {
+        // Check ALL stations to see which ones were freed (broadcast completed)
+        List<ReservationStation> allStations = rsPool.getAllStations();
+        for (ReservationStation rs : allStations) {
+            // Station was busy before write-back, now it's free → broadcast happened!
             if (!rs.isBusy() && stationNamesBefore.containsKey(rs.getName())) {
                 Integer instrId = stationNamesBefore.get(rs.getName());
                 if (instrId != null && instrId > 0) {
@@ -277,6 +279,14 @@ public class SimulationController {
                     if (completedInstr != null && isBranchInstruction(completedInstr)) {
                         resolveBranch(completedInstr, currentCycle);
                     }
+                    
+                    // PROGRESSIVE TIMING: Set execEnd when broadcast happens
+                    // Execution completes when the result is ready to broadcast
+                    // The broadcast itself happens in the current cycle (write-back stage)
+                    if (execStartCycles.containsKey(instrId) && !execEndCycles.containsKey(instrId)) {
+                        execEndCycles.put(instrId, currentCycle);
+                    }
+                    
                     // Mark complete cycle as current cycle (when broadcast happened)
                     if (!completeCycles.containsKey(instrId)) {
                         completeCycles.put(instrId, currentCycle);
@@ -291,8 +301,8 @@ public class SimulationController {
         
         // Track execution start/end cycles for display purposes
         // Check which instructions started execution this cycle (after executionUnit.cycle() call)
-        List<ReservationStation> allStations = rsPool.getAllStations();
-        for (ReservationStation rs : allStations) {
+        List<ReservationStation> executingStations = rsPool.getAllStations();
+        for (ReservationStation rs : executingStations) {
             if (rs.isExecutionStarted() && rs.getInstruction() != null) {
                 int instrId = rs.getInstruction().getId();
                 
@@ -306,9 +316,10 @@ public class SimulationController {
                     int latency = executionUnit.getLatency(rs.getOp());
                     if (latency > 0) {
                         execStartCycles.put(instrId, currentCycle);
-                        // Execution end = start + latency - 1 (e.g., start cycle 2, latency 2, end cycle 3)
-                        execEndCycles.put(instrId, currentCycle + latency - 1);
-                        log("EXEC START: " + rs.getInstruction() + " in " + rs.getName() + " (cycles: " + currentCycle + "..." + (currentCycle + latency - 1) + ")");
+                        // DON'T pre-calculate execEnd - it will be set when execution actually completes
+                        // This ensures the display shows "2.." while executing, "2..6" only when done
+                        int expectedEnd = currentCycle + latency - 1;
+                        log("EXEC START: " + rs.getInstruction() + " in " + rs.getName() + " (cycles: " + currentCycle + "..." + expectedEnd + ")");
                     }
                 }
             }
@@ -347,10 +358,9 @@ public class SimulationController {
                                 // Only set if not already set (avoid overwriting)
                                 if (!execStartCycles.containsKey(instrId)) {
                                     execStartCycles.put(instrId, execStart);
-                                    // Execution end = start + latency - 1
-                                    // Example: start cycle 1, latency 3 -> executes cycles 1,2,3 -> completes end of cycle 3
+                                    // DON'T pre-calculate execEnd for memory operations
+                                    // It will be set when the load actually completes (in LOAD COMPLETE section)
                                     int expectedEnd = execStart + latency - 1;
-                                    execEndCycles.put(instrId, expectedEnd);
                                     log("  Memory op execution: " + execStart + "..." + expectedEnd + 
                                         " (latency=" + latency + ", loadLatency=" + memorySystem.getLoadLatency() + 
                                         ", cacheHitLatency=" + memorySystem.getCacheSimulator().getHitLatency() + 
@@ -384,13 +394,11 @@ public class SimulationController {
                     if (instr.isMemoryOperation() && instr.getOperation().equals(op.op) 
                         && instr.getDestRegister() != null && instr.getDestRegister().equals(op.destReg)) {
                         loadInstrId = instr.getId();
-                        // Update execution end to current cycle (when it actually completes)
+                        // PROGRESSIVE TIMING: Set execution end when load actually completes
                         if (execStartCycles.containsKey(loadInstrId)) {
-                            Integer originalEnd = execEndCycles.get(loadInstrId);
-                            execEndCycles.put(loadInstrId, currentCycle);
-                            if (originalEnd != null && currentCycle > originalEnd + 2) {
-                                // Log if actual completion is significantly later than expected
-                                log("  ⚠ Load completed later than expected: expected ~" + originalEnd + ", actual " + currentCycle);
+                            // Only set execEnd if not already set (shouldn't be set since we don't pre-calculate)
+                            if (!execEndCycles.containsKey(loadInstrId)) {
+                                execEndCycles.put(loadInstrId, currentCycle);
                             }
                         } else {
                             // Load completed but we never tracked its start - this shouldn't happen
@@ -407,12 +415,14 @@ public class SimulationController {
                 if (loadStationName != null && !loadStationName.isEmpty()) {
                     int rsId = ExecutionUnit.stationNameToRsId(loadStationName);
                     int destRegNum = convertRegNameToNumber(op.destReg);
+                    // CRITICAL FIX: Convert long bits to double for L.D/LD instructions
+                    double loadedValue = Double.longBitsToDouble(op.value);
                     BroadcastRequest request = new BroadcastRequest(
-                        rsId, (double)op.value, destRegNum, op.op);
+                        rsId, loadedValue, destRegNum, op.op);
                     // CRITICAL FIX: Load completes execution in currentCycle, broadcast in next cycle
                     request.setReadyCycle(currentCycle + 1);
                     CommonDataBus.getInstance().addBroadcastRequest(request);
-                    log("  → Added to CDB: " + loadStationName + " -> " + op.destReg + " = " + op.value);
+                    log("  → Added to CDB: " + loadStationName + " -> " + op.destReg + " = " + loadedValue);
                 } else {
                     // Fallback: directly update register if no station found
                     // NOTE: This should not happen in normal operation - if Qi is null,
@@ -421,7 +431,8 @@ public class SimulationController {
                     String currentQi = registerFile.getQi(op.destReg);
                     if (currentQi == null || currentQi.isEmpty()) {
                         // No pending write - safe to update
-                    registerFile.writeValue(op.destReg, (double)op.value);
+                        double loadedValue = Double.longBitsToDouble(op.value);
+                    registerFile.writeValue(op.destReg, loadedValue);
                         log("  → Directly updated " + op.destReg + " (no Qi found - fallback case)");
                     } else {
                         // WAW scenario - a later instruction has claimed this register
@@ -541,7 +552,8 @@ public class SimulationController {
         
         // Also check for any load stations that became free after broadcast
         // (in case they weren't in memoryResults but completed earlier)
-        for (ReservationStation rs : stationsAfter) {
+        List<ReservationStation> loadStationsCheck = rsPool.getAllStations();
+        for (ReservationStation rs : loadStationsCheck) {
             if (!rs.isBusy() && rs.getInstruction() != null) {
                 Instruction instr = rs.getInstruction();
                 String op = instr.getOperation();
@@ -947,6 +959,17 @@ public class SimulationController {
             effectiveLsbSize
         );
         
+        // CRITICAL FIX: Re-apply memory preloads after recreating MemorySystem
+        // Otherwise all preloaded data is lost when cache configuration changes
+        if (!memoryPreloadValues.isEmpty()) {
+            for (Map.Entry<Integer, Integer> entry : memoryPreloadValues.entrySet()) {
+                int address = entry.getKey();
+                int value = entry.getValue();
+                double doubleValue = (double) value;
+                memorySystem.writeDouble(address, doubleValue);
+            }
+        }
+        
         // Recreate issue unit with new memory system
         issueUnit = new InstructionIssueUnit(rsPool, registerFile, memorySystem);
         
@@ -976,18 +999,8 @@ public class SimulationController {
             return false;
         }
         
-        // Cache and latency values use safe defaults if not configured
-        // This allows simulation to run, but user should configure for accurate results
-        boolean usingCacheDefaults = (cacheSize == 64 * 1024 && blockSize == 64 && 
-                                     cacheHitLatency == 1 && cacheMissPenalty == 10);
-        boolean usingLatencyDefaults = (loadLatency == 2 && storeLatency == 2);
-        
-        if (usingCacheDefaults) {
-            log("WARNING: Using default cache configuration - configure cache parameters for accurate simulation");
-        }
-        if (usingLatencyDefaults) {
-            log("WARNING: Using default load/store latencies - configure instruction latencies for accurate simulation");
-        }
+        // User must configure all parameters - no warnings about defaults
+        // The simulation will use whatever values are configured in the GUI
         
         // All checks pass - safe defaults will be used if not configured
         return true;

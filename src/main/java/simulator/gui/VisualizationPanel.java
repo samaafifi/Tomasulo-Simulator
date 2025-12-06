@@ -8,7 +8,6 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.paint.Color;
 import simulator.tomasulo.issue.*;
 import simulator.tomasulo.registerfile.*;
-import simulator.memory.*;
 import simulator.tomasulo.models.Instruction;
 import java.util.*;
 
@@ -307,17 +306,27 @@ public class VisualizationPanel {
             Integer issueCycle = issueCycles.get(instr.getId());
             row.setIssue(issueCycle != null ? String.valueOf(issueCycle) : "");
             
-            // Execution complete range - show only for this specific instruction
+            // PROGRESSIVE TIMING DISPLAY:
+            // - Not started: empty ""
+            // - Started but not finished: "2.." (shows start cycle only)
+            // - Finished: "2..6" (shows full range)
             Integer execStart = execStartCycles.get(instr.getId());
             Integer execEnd = execEndCycles.get(instr.getId());
-            if (execStart != null && execEnd != null && execStart > 0 && execEnd >= execStart) {
-                if (execStart.equals(execEnd)) {
-                    row.setExecComplete(String.valueOf(execStart));
+            
+            if (execStart != null && execStart > 0) {
+                if (execEnd != null && execEnd >= execStart) {
+                    // Execution has completed - show full range
+                    if (execStart.equals(execEnd)) {
+                        row.setExecComplete(String.valueOf(execStart));
+                    } else {
+                        row.setExecComplete(execStart + ".." + execEnd);
+                    }
                 } else {
-                    row.setExecComplete(execStart + "..." + execEnd);
+                    // Execution started but not yet completed - show "start.."
+                    row.setExecComplete(execStart + "..");
                 }
             } else {
-                // Show empty if execution hasn't started yet
+                // Execution hasn't started yet
                 row.setExecComplete("");
             }
             
